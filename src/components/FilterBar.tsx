@@ -26,6 +26,10 @@ export const defaultFilters: Filters = {
   aggregation: "raw",
 };
 
+const ALL = "__all__";
+const toVal = (v: string) => (v === ALL ? "" : v);
+const fromVal = (v: string) => (v === "" ? ALL : v);
+
 function LoadingSelect() {
   return (
     <div className="flex items-center gap-1 text-xs text-muted-foreground h-9 px-3 border rounded-md bg-card">
@@ -45,10 +49,10 @@ export function FilterBar({ filters, onChange }: Props) {
   const runs = runsResult?.data ?? [];
   const fromApi = varsResult?.fromApi || sourcesResult?.fromApi;
 
-  const set = (key: keyof Filters, val: string) => onChange({ ...filters, [key]: val });
+  const set = (key: keyof Filters, val: string) => onChange({ ...filters, [key]: toVal(val) });
 
   const entityTypes = [
-    { value: "", label: "Toutes entités" },
+    { value: ALL, label: "Toutes entités" },
     { value: "hydrométrique", label: "Stations hydro." },
     { value: "pluviométrique", label: "Stations pluvio." },
     { value: "dam", label: "Barrages" },
@@ -77,12 +81,12 @@ export function FilterBar({ filters, onChange }: Props) {
       {/* Variable */}
       <div className="min-w-[140px]">
         {varsLoading ? <LoadingSelect /> : (
-          <Select value={filters.variable} onValueChange={(v) => set("variable", v)}>
+          <Select value={fromVal(filters.variable)} onValueChange={(v) => set("variable", v)}>
             <SelectTrigger className="h-9 text-xs">
               <SelectValue placeholder="Variable" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Toutes variables</SelectItem>
+              <SelectItem value={ALL}>Toutes variables</SelectItem>
               {variables.map((v) => (
                 <SelectItem key={v.code} value={v.code}>{v.label} ({v.unit})</SelectItem>
               ))}
@@ -94,12 +98,12 @@ export function FilterBar({ filters, onChange }: Props) {
       {/* Source */}
       <div className="min-w-[160px]">
         {sourcesLoading ? <LoadingSelect /> : (
-          <Select value={filters.source} onValueChange={(v) => { set("source", v); onChange({ ...filters, source: v, run: "" }); }}>
+          <Select value={fromVal(filters.source)} onValueChange={(v) => { const real = toVal(v); onChange({ ...filters, source: real, run: "" }); }}>
             <SelectTrigger className="h-9 text-xs">
               <SelectValue placeholder="Source" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Toutes sources</SelectItem>
+              <SelectItem value={ALL}>Toutes sources</SelectItem>
               {sources.map((s) => (
                 <SelectItem key={s.code} value={s.code}>{s.label}</SelectItem>
               ))}
@@ -111,12 +115,12 @@ export function FilterBar({ filters, onChange }: Props) {
       {/* Run */}
       <div className="min-w-[140px]">
         {runsLoading ? <LoadingSelect /> : (
-          <Select value={filters.run} onValueChange={(v) => set("run", v)}>
+          <Select value={fromVal(filters.run)} onValueChange={(v) => set("run", v)}>
             <SelectTrigger className="h-9 text-xs">
               <SelectValue placeholder="Run" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Tous runs</SelectItem>
+              <SelectItem value={ALL}>Tous runs</SelectItem>
               {runs.map((r) => (
                 <SelectItem key={r.id} value={r.id}>
                   {new Date(r.run_time).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}
@@ -129,7 +133,7 @@ export function FilterBar({ filters, onChange }: Props) {
 
       {/* Entity type */}
       <div className="min-w-[150px]">
-        <Select value={filters.entityType} onValueChange={(v) => set("entityType", v)}>
+        <Select value={fromVal(filters.entityType)} onValueChange={(v) => set("entityType", v)}>
           <SelectTrigger className="h-9 text-xs">
             <SelectValue placeholder="Entité" />
           </SelectTrigger>
