@@ -1,13 +1,17 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useVariables, useSources, useRuns, useStations } from "@/hooks/useApi";
+import { useVariables, useSources, useRuns, useBasins } from "@/hooks/useApi";
 import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
 
 export interface Filters {
+  basin_id: string;
+  station_id: string;
   variable: string;
-  source: string;
+  sources: string[];   // multi-select
   run: string;
-  entityType: string;
   period: string;
   aggregation: string;
 }
@@ -15,13 +19,17 @@ export interface Filters {
 interface Props {
   filters: Filters;
   onChange: (f: Filters) => void;
+  /** Hide certain filters */
+  hideVariable?: boolean;
+  contextVariable?: string;
 }
 
 export const defaultFilters: Filters = {
+  basin_id: "",
+  station_id: "",
   variable: "",
-  source: "",
+  sources: ["OBS", "AROME", "ECMWF"],
   run: "",
-  entityType: "",
   period: "7d",
   aggregation: "raw",
 };
@@ -38,31 +46,33 @@ function LoadingSelect() {
   );
 }
 
-export function FilterBar({ filters, onChange }: Props) {
+export function FilterBar({ filters, onChange, hideVariable, contextVariable }: Props) {
   const { data: varsResult, isLoading: varsLoading } = useVariables();
   const { data: sourcesResult, isLoading: sourcesLoading } = useSources();
-  const { data: runsResult, isLoading: runsLoading } = useRuns(filters.source || undefined);
-  const { data: stationsResult } = useStations();
+  const { data: runsResult, isLoading: runsLoading } = useRuns(
+    filters.sources.length === 1 ? filters.sources[0] : undefined
+  );
+  const { data: basinsResult } = useBasins();
 
   const variables = varsResult?.data ?? [];
   const sources = sourcesResult?.data ?? [];
   const runs = runsResult?.data ?? [];
+  const availableBasins = basinsResult?.data ?? [];
   const fromApi = varsResult?.fromApi || sourcesResult?.fromApi;
 
-  const set = (key: keyof Filters, val: string) => onChange({ ...filters, [key]: toVal(val) });
+  const set = (key: keyof Filters, val: any) => onChange({ ...filters, [key]: key === "sources" ? val : toVal(val) });
 
-  const entityTypes = [
-    { value: ALL, label: "Toutes entités" },
-    { value: "hydrométrique", label: "Stations hydro." },
-    { value: "pluviométrique", label: "Stations pluvio." },
-    { value: "dam", label: "Barrages" },
-  ];
+  const toggleSource = (code: string) => {
+    const current = filters.sources;
+    const next = current.includes(code) ? current.filter((c) => c !== code) : [...current, code];
+    if (next.length > 0) onChange({ ...filters, sources: next });
+  };
 
   const periods = [
     { value: "24h", label: "24 h" },
     { value: "72h", label: "72 h" },
     { value: "7d", label: "7 jours" },
-    { value: "30d", label: "30 jours" },
+    { value: "14d", label: "14 jours" },
     { value: "custom", label: "Personnalisé" },
   ];
 
@@ -75,40 +85,65 @@ export function FilterBar({ filters, onChange }: Props) {
   return (
     <div className="flex flex-wrap items-center gap-2 p-3 bg-card rounded-lg border">
       {fromApi === false && (
-        <Badge variant="outline" className="text-warning border-warning/30 text-[10px]">Mode mock</Badge>
+        <Badge variant="outline" className="text-warning border-warning/30 text-[10px]">Mock</Badge>
       )}
 
-      {/* Variable */}
+      {/* Basin */}
       <div className="min-w-[140px]">
-        {varsLoading ? <LoadingSelect /> : (
-          <Select value={fromVal(filters.variable)} onValueChange={(v) => set("variable", v)}>
-            <SelectTrigger className="h-9 text-xs">
-              <SelectValue placeholder="Variable" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>Toutes variables</SelectItem>
-              {variables.map((v) => (
-                <SelectItem key={v.code} value={v.code}>{v.label} ({v.unit})</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+        <Select value={fromVal(filters.basin_id)} onValueChange={(v) => set("basin_id", v)}>
+          <SelectTrigger className="h-9 text-xs">
+            <SelectValue placeholder="Bassin" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Tous bassins</SelectItem>
+            {availableBasins.map((b) => (
+              <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* Source */}
+      {/* Variable */}
+      {!hideVariable && (
+        <div className="min-w-[140px]">
+          {varsLoading ? <LoadingSelect /> : (
+            <Select value={fromVal(contextVariable || filters.variable)} onValueChange={(v) => set("variable", v)}>
+              <SelectTrigger className="h-9 text-xs">
+                <SelectValue placeholder="Variable" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>Toutes variables</SelectItem>
+                {variables.map((v) => (
+                  <SelectItem key={v.code} value={v.code}>{v.label} ({v.unit})</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+      )}
+
+      {/* Sources (multi-select) */}
       <div className="min-w-[160px]">
         {sourcesLoading ? <LoadingSelect /> : (
-          <Select value={fromVal(filters.source)} onValueChange={(v) => { const real = toVal(v); onChange({ ...filters, source: real, run: "" }); }}>
-            <SelectTrigger className="h-9 text-xs">
-              <SelectValue placeholder="Source" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>Toutes sources</SelectItem>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="h-9 text-xs justify-start gap-1 font-normal">
+                Sources ({filters.sources.length})
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-48 p-2">
               {sources.map((s) => (
-                <SelectItem key={s.code} value={s.code}>{s.label}</SelectItem>
+                <label key={s.code} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer text-xs">
+                  <Checkbox
+                    checked={filters.sources.includes(s.code)}
+                    onCheckedChange={() => toggleSource(s.code)}
+                  />
+                  <span>{s.label}</span>
+                  {s.horizon && <span className="text-muted-foreground ml-auto">{s.horizon}</span>}
+                </label>
               ))}
-            </SelectContent>
-          </Select>
+            </PopoverContent>
+          </Popover>
         )}
       </div>
 
@@ -123,7 +158,7 @@ export function FilterBar({ filters, onChange }: Props) {
               <SelectItem value={ALL}>Tous runs</SelectItem>
               {runs.map((r) => (
                 <SelectItem key={r.id} value={r.id}>
-                  {new Date(r.run_time).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}
+                  {r.label || new Date(r.run_time).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -131,22 +166,8 @@ export function FilterBar({ filters, onChange }: Props) {
         )}
       </div>
 
-      {/* Entity type */}
-      <div className="min-w-[150px]">
-        <Select value={fromVal(filters.entityType)} onValueChange={(v) => set("entityType", v)}>
-          <SelectTrigger className="h-9 text-xs">
-            <SelectValue placeholder="Entité" />
-          </SelectTrigger>
-          <SelectContent>
-            {entityTypes.map((e) => (
-              <SelectItem key={e.value} value={e.value}>{e.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
       {/* Period */}
-      <div className="min-w-[110px]">
+      <div className="min-w-[100px]">
         <Select value={filters.period} onValueChange={(v) => set("period", v)}>
           <SelectTrigger className="h-9 text-xs">
             <SelectValue placeholder="Période" />
@@ -160,7 +181,7 @@ export function FilterBar({ filters, onChange }: Props) {
       </div>
 
       {/* Aggregation */}
-      <div className="min-w-[110px]">
+      <div className="min-w-[100px]">
         <Select value={filters.aggregation} onValueChange={(v) => set("aggregation", v)}>
           <SelectTrigger className="h-9 text-xs">
             <SelectValue placeholder="Agrégation" />

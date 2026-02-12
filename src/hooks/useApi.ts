@@ -17,7 +17,7 @@ export function useRuns(source_code?: string) {
   });
 }
 
-export function useStations(params?: { type?: string }) {
+export function useStations(params?: { type?: string; basin_id?: string }) {
   return useQuery({
     queryKey: ["stations", params],
     queryFn: () => api.getStations(params),
@@ -41,12 +41,20 @@ export function useAlerts(params?: { level?: string; active?: number }) {
   });
 }
 
-export function useCompare(params: { station_id: string; variable_code?: string; from?: string; to?: string }) {
+export function useCompare(params: { station_id: string; variable_code?: string; from?: string; to?: string; sources?: string }) {
   return useQuery({
     queryKey: ["compare", params],
     queryFn: () => api.getCompare(params),
     enabled: !!params.station_id,
     staleTime: 60_000,
+  });
+}
+
+export function useKpis(params?: { basin_id?: string; window?: string }) {
+  return useQuery({
+    queryKey: ["kpis", params],
+    queryFn: () => api.getKpis(params),
+    staleTime: 30_000,
   });
 }
 
