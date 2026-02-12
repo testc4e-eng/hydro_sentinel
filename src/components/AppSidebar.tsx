@@ -1,15 +1,8 @@
-import { BarChart3, Waves, Building2, Upload, Settings, Droplets } from "lucide-react";
+import { BarChart3, Waves, Building2, Upload, Settings, Droplets, Plug } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarHeader,
+  Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
+  SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader,
 } from "@/components/ui/sidebar";
 
 const navItems = [
@@ -18,6 +11,7 @@ const navItems = [
   { title: "Barrages", url: "/barrages", icon: Building2 },
   { title: "Import", url: "/import", icon: Upload },
   { title: "Paramètres", url: "/settings", icon: Settings },
+  { title: "Environnement", url: "/environment", icon: Plug },
 ];
 
 export function AppSidebar() {

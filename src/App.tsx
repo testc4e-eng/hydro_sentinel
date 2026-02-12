@@ -9,6 +9,7 @@ import Stations from "./pages/Stations";
 import Dams from "./pages/Dams";
 import Import from "./pages/Import";
 import Settings from "./pages/Settings";
+import Environment from "./pages/Environment";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
             <Route path="/barrages" element={<Dams />} />
             <Route path="/import" element={<Import />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/environment" element={<Environment />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -1,8 +1,13 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Outlet } from "react-router-dom";
+import { useHealth } from "@/hooks/useApi";
+import { Badge } from "@/components/ui/badge";
 
 export function Layout() {
+  const { data: result } = useHealth();
+  const fromApi = result?.fromApi ?? false;
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full">
@@ -10,7 +15,14 @@ export function Layout() {
         <main className="flex-1 flex flex-col overflow-hidden">
           <header className="h-12 flex items-center border-b px-4 bg-card shrink-0">
             <SidebarTrigger />
-            <span className="ml-3 text-sm text-muted-foreground">Prototype — Données fictives</span>
+            <span className="ml-3 text-sm text-muted-foreground">
+              {fromApi ? "Connecté à l'API" : "Prototype — Données fictives"}
+            </span>
+            {!fromApi && (
+              <Badge variant="outline" className="ml-2 text-[10px] text-warning border-warning/30">
+                mock
+              </Badge>
+            )}
           </header>
           <div className="flex-1 overflow-auto">
             <Outlet />
