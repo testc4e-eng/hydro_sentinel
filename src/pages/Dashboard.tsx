@@ -4,12 +4,14 @@ import { HydroMap } from "@/components/HydroMap";
 import { KPICards } from "@/components/KPICards";
 import { AlertsList } from "@/components/AlertsList";
 import { TimeseriesChart } from "@/components/TimeseriesChart";
+import { FilterBar, defaultFilters, type Filters } from "@/components/FilterBar";
 import { stations, dams, getDamStatus, getDamFillPct, getDamRecommendation, getBasinName } from "@/data/mockData";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { CriticalityBadge } from "@/components/CriticalityBadge";
 
 export default function Dashboard() {
   const [selected, setSelected] = useState<{ type: string; id: string } | null>(null);
+  const [filters, setFilters] = useState<Filters>(defaultFilters);
 
   const selectedStation = selected?.type === "station" ? stations.find((s) => s.id === selected.id) : null;
   const selectedDam = selected?.type === "dam" ? dams.find((d) => d.id === selected.id) : null;
@@ -17,6 +19,8 @@ export default function Dashboard() {
 
   return (
     <div className="p-4 lg:p-6 space-y-4">
+      <FilterBar filters={filters} onChange={setFilters} />
+
       <KPICards />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
