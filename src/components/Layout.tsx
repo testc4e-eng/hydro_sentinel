@@ -15,13 +15,12 @@ export function Layout() {
         <main className="flex-1 flex flex-col overflow-hidden">
           <header className="h-12 flex items-center border-b px-4 bg-card shrink-0">
             <SidebarTrigger />
-            <span className="ml-3 text-sm text-muted-foreground">
+            <span className="ml-3 text-sm font-medium text-foreground">Hydro-Météo Sebou</span>
+            <span className="ml-2 text-xs text-muted-foreground">
               {fromApi ? "Connecté à l'API" : "Prototype — Données fictives"}
             </span>
             {!fromApi && (
-              <Badge variant="outline" className="ml-2 text-[10px] text-warning border-warning/30">
-                mock
-              </Badge>
+              <Badge variant="outline" className="ml-2 text-[10px] text-warning border-warning/30">mock</Badge>
             )}
           </header>
           <div className="flex-1 overflow-auto">

@@ -8,6 +8,11 @@ interface Props {
 }
 
 const statusColors = { safe: "#22c55e", warning: "#f59e0b", critical: "#ef4444" };
+const typeIcons: Record<string, string> = {
+  station: "●",
+  barrage: "■",
+  result_point: "▲",
+};
 
 export function HydroMap({ onSelectEntity }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -30,14 +35,14 @@ export function HydroMap({ onSelectEntity }: Props) {
         },
         layers: [{ id: "osm", type: "raster", source: "osm" }],
       },
-      center: [-6.5, 32.5],
-      zoom: 5.5,
+      center: [-5.0, 34.0],
+      zoom: 7,
     });
 
     map.addControl(new maplibregl.NavigationControl(), "top-right");
 
     map.on("load", () => {
-      // Basins
+      // Basins choropleth
       map.addSource("basins", {
         type: "geojson",
         data: {
@@ -49,15 +54,16 @@ export function HydroMap({ onSelectEntity }: Props) {
           })),
         },
       });
-      map.addLayer({ id: "basins-fill", type: "fill", source: "basins", paint: { "fill-color": ["get", "color"], "fill-opacity": 0.12 } });
-      map.addLayer({ id: "basins-line", type: "line", source: "basins", paint: { "line-color": ["get", "color"], "line-width": 2, "line-opacity": 0.6 } });
+      map.addLayer({ id: "basins-fill", type: "fill", source: "basins", paint: { "fill-color": ["get", "color"], "fill-opacity": 0.15 } });
+      map.addLayer({ id: "basins-line", type: "line", source: "basins", paint: { "line-color": ["get", "color"], "line-width": 2, "line-opacity": 0.7 } });
 
-      // Stations
+      // Stations (type=station)
+      const stationPoints = stations.filter(s => s.type === "station");
       map.addSource("stations", {
         type: "geojson",
         data: {
           type: "FeatureCollection",
-          features: stations.map((s) => ({
+          features: stationPoints.map((s) => ({
             type: "Feature" as const,
             properties: { id: s.id, name: s.name, type: s.type },
             geometry: { type: "Point" as const, coordinates: [s.lon, s.lat] },
@@ -69,21 +75,21 @@ export function HydroMap({ onSelectEntity }: Props) {
         paint: { "circle-radius": 6, "circle-color": "#3b82f6", "circle-stroke-width": 2, "circle-stroke-color": "#ffffff" },
       });
 
-      // Dams
+      // Dams (type=barrage)
       map.addSource("dams", {
         type: "geojson",
         data: {
           type: "FeatureCollection",
           features: dams.map((d) => ({
             type: "Feature" as const,
-            properties: { id: d.id, name: d.name, color: statusColors[getDamStatus(d)] },
+            properties: { id: d.id, name: d.name, color: statusColors[getDamStatus(d)], fill_pct: Math.round((d.current_volume / d.capacity) * 100) },
             geometry: { type: "Point" as const, coordinates: [d.lon, d.lat] },
           })),
         },
       });
       map.addLayer({
         id: "dams-circles", type: "circle", source: "dams",
-        paint: { "circle-radius": 9, "circle-color": ["get", "color"], "circle-stroke-width": 2.5, "circle-stroke-color": "#ffffff" },
+        paint: { "circle-radius": 10, "circle-color": ["get", "color"], "circle-stroke-width": 3, "circle-stroke-color": "#ffffff" },
       });
 
       // Click handlers
@@ -98,20 +104,43 @@ export function HydroMap({ onSelectEntity }: Props) {
       handleClick("stations-circles", "station");
       handleClick("dams-circles", "dam");
 
-      // Hover popups
+      // Popups
       const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
       map.on("mouseenter", "stations-circles", (e) => {
         const p = e.features?.[0]?.properties;
-        if (p) popup.setLngLat(e.lngLat).setHTML(`<strong>${p.name}</strong><br/><small>${p.type}</small>`).addTo(map);
+        if (p) popup.setLngLat(e.lngLat).setHTML(`<strong>${p.name}</strong><br/><small>Station</small>`).addTo(map);
       });
       map.on("mouseleave", "stations-circles", () => popup.remove());
 
       const popup2 = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
       map.on("mouseenter", "dams-circles", (e) => {
         const p = e.features?.[0]?.properties;
-        if (p) popup2.setLngLat(e.lngLat).setHTML(`<strong>🏗 ${p.name}</strong>`).addTo(map);
+        if (p) popup2.setLngLat(e.lngLat).setHTML(`<strong>🏗 ${p.name}</strong><br/><small>Remplissage: ${p.fill_pct}%</small>`).addTo(map);
       });
       map.on("mouseleave", "dams-circles", () => popup2.remove());
+
+      // Basin labels
+      map.addSource("basin-labels", {
+        type: "geojson",
+        data: {
+          type: "FeatureCollection",
+          features: basins.map((b) => {
+            const coords = b.geometry.coordinates[0];
+            const cx = coords.reduce((s, c) => s + c[0], 0) / coords.length;
+            const cy = coords.reduce((s, c) => s + c[1], 0) / coords.length;
+            return {
+              type: "Feature" as const,
+              properties: { name: b.name },
+              geometry: { type: "Point" as const, coordinates: [cx, cy] },
+            };
+          }),
+        },
+      });
+      map.addLayer({
+        id: "basin-labels-text", type: "symbol", source: "basin-labels",
+        layout: { "text-field": ["get", "name"], "text-size": 12, "text-font": ["Open Sans Regular"] },
+        paint: { "text-color": "#374151", "text-halo-color": "#ffffff", "text-halo-width": 1.5 },
+      });
     });
 
     mapRef.current = map;
