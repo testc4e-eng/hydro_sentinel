@@ -19,6 +19,7 @@ import asyncio
 import logging
 import os
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from dotenv import load_dotenv
 from sqlalchemy import text, select
@@ -76,20 +77,49 @@ def _ensure_postgres_url(raw_url: str) -> str:
     if not raw_url:
         raise RuntimeError("DATABASE_URL is missing. Put it in backend/.env or environment variables.")
 
-    if raw_url.startswith("sqlite"):
+    value = raw_url.strip()
+    if value.startswith("psql "):
+        value = value[5:].strip()
+    value = value.strip("'\"")
+
+    if value.startswith("sqlite"):
         raise RuntimeError(
             "DATABASE_URL points to SQLite. This init script requires PostgreSQL "
             "(because it creates schema 'auth'). Fix DATABASE_URL in backend/.env."
         )
 
-    if raw_url.startswith("postgresql+asyncpg://"):
-        return raw_url
+    if value.startswith("postgresql+asyncpg://"):
+        return _normalize_asyncpg_query_params(value)
 
-    if raw_url.startswith("postgresql://"):
-        return raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    if value.startswith("postgresql://"):
+        converted = value.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return _normalize_asyncpg_query_params(converted)
+
+    if value.startswith("postgres://"):
+        converted = value.replace("postgres://", "postgresql+asyncpg://", 1)
+        return _normalize_asyncpg_query_params(converted)
 
     raise RuntimeError(
-        f"Unsupported DATABASE_URL scheme. Expected postgresql:// or postgresql+asyncpg://, got: {raw_url.split(':',1)[0]}:"
+        f"Unsupported DATABASE_URL scheme. Expected postgresql:// or postgresql+asyncpg://, got: {value.split(':',1)[0]}:"
+    )
+
+
+def _normalize_asyncpg_query_params(url: str) -> str:
+    parts = urlsplit(url)
+    query_items = parse_qsl(parts.query, keep_blank_values=True)
+    normalized_items = []
+
+    for key, value in query_items:
+        lowered = key.lower()
+        if lowered == "sslmode":
+            normalized_items.append(("ssl", value or "require"))
+            continue
+        if lowered == "channel_binding":
+            continue
+        normalized_items.append((key, value))
+
+    return urlunsplit(
+        (parts.scheme, parts.netloc, parts.path, urlencode(normalized_items), parts.fragment)
     )
 
 
