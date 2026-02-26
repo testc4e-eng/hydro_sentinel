@@ -1,9 +1,25 @@
 import axios from 'axios';
 import { useAuthStore } from '../store/authStore';
 
+const buildApiRoot = (baseUrl: string, apiPrefix: string): string => {
+  const normalizedPrefix = apiPrefix.startsWith('/') ? apiPrefix : `/${apiPrefix}`;
+  const trimmedBase = baseUrl.trim();
+
+  if (!trimmedBase) {
+    return normalizedPrefix;
+  }
+
+  return `${trimmedBase.replace(/\/+$/, '')}${normalizedPrefix}`;
+};
+
+const apiRoot = buildApiRoot(
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:8003',
+  import.meta.env.VITE_API_PREFIX || '/api/v1'
+);
+
 // Create axios instance (not exported yet)
 const axiosInstance = axios.create({
-  baseURL: 'http://localhost:8003/api/v1',
+  baseURL: apiRoot,
   headers: {
     'Content-Type': 'application/json',
   },

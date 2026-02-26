@@ -18,16 +18,21 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 import traceback
 import sys
+from datetime import datetime
+import os
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     error_msg = f"GLOBAL HANDLER CAUGHT: {str(exc)}\n{traceback.format_exc()}"
     print(error_msg, file=sys.stderr)
+
+    # Optional: write to a local file only in dev
     try:
-        with open("c:/dev/detection_inondation/hydro_sentinel/backend/global_error.log", "a") as f:
-            f.write(f"--- {datetime.now()} ---\n")
-            f.write(error_msg + "\n")
-    except:
+        if os.getenv("ENV", "dev") == "dev":
+            with open("global_error.log", "a", encoding="utf-8") as f:
+                f.write(f"--- {datetime.now()} ---\n")
+                f.write(error_msg + "\n")
+    except Exception:
         pass
     return JSONResponse(
         status_code=500,

@@ -27,6 +27,24 @@ class Settings(BaseSettings):
     # Default to SQLite for local dev if Postgres generic URL is present or if env var is missing
     # In production, this will be overridden by the actual Postgres URL
     DATABASE_URL: str = "sqlite+aiosqlite:///./sql_app.db"
+
+    @validator("DATABASE_URL", pre=True)
+    def normalize_database_url(cls, v: str) -> str:
+        if not isinstance(v, str) or not v.strip():
+            return "sqlite+aiosqlite:///./sql_app.db"
+
+        value = v.strip()
+        if value.startswith("psql "):
+            value = value[5:].strip()
+        value = value.strip("'\"")
+
+        if value.startswith("postgresql+asyncpg://"):
+            return value
+        if value.startswith("postgresql://"):
+            return value.replace("postgresql://", "postgresql+asyncpg://", 1)
+        if value.startswith("postgres://"):
+            return value.replace("postgres://", "postgresql+asyncpg://", 1)
+        return value
     
     # JWT
     SECRET_KEY: str = "CHANGE_THIS_SECRET_KEY_IN_PRODUCTION_982347982374"
