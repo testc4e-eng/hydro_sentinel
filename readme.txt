@@ -1,0 +1,3 @@
+Backend (Python) : le fichier standard requirements.txt dans le dossier backend. Vous pouvez réinstaller cet environnement sur une autre machine avec : pip install -r backend/requirements.txt
+
+Frontend (React/Node.js) : Dans l'écosystème Node.js, le fichier de configuration standard est le package.json (associé au package-lock.json). Ces deux fichiers sont déjà présents et à jour dans votre dossier hydro-sentinel ! Ils gèrent automatiquement vos dépendances react, maplibre-gl, recharts, radix-ui, etc. lorsque vous faites un npm install.

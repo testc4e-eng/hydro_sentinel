@@ -1,5 +1,19 @@
-# Logs
-logs
+# Monorepo ignore (backend + frontend)
+
+# --- OS / Editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.suo
+*.user
+*.userossc
+*.sw?
+
+# --- Logs ---
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -7,18 +21,54 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
+# --- Secrets / env ---
+.env
+.env.*
+!.env.example
+
+# --- Python / FastAPI ---
+__pycache__/
+*.py[cod]
+*.pyd
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.venv/
+venv/
+env/
+pip-wheel-metadata/
+*.egg-info/
+.eggs/
+
+# --- Python local DB / runtime files ---
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.pid
+
+# --- Node / Vite / React ---
+node_modules/
+dist/
+dist-ssr/
+coverage/
+.vite/
 *.local
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+# --- Project generated artifacts ---
+backend/openapi_dump*.json
+backend/downloaded_template.xlsx
+backend/update_views_error.txt
+backend/verify_source.txt
+backend/view_structure.txt
+
+# --- Large backup / restore artifacts ---
+*.dump
+restore.list
+
