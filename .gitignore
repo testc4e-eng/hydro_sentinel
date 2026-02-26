@@ -71,4 +71,9 @@ backend/view_structure.txt
 # --- Large backup / restore artifacts ---
 *.dump
 restore.list
+backup_hydro_sentinel.dump
+app_inondation_db.sql
 
+# --- Agent local rules ---
+AGENT_RULES.md
+AGENTS.md
