@@ -13,7 +13,7 @@ const buildApiRoot = (baseUrl: string, apiPrefix: string): string => {
 };
 
 const apiRoot = buildApiRoot(
-  import.meta.env.VITE_API_BASE_URL || 'http://localhost:8003',
+  import.meta.env.VITE_API_BASE_URL || '',
   import.meta.env.VITE_API_PREFIX || '/api/v1'
 );
 
@@ -102,18 +102,66 @@ export const api = Object.assign(axiosInstance, {
   }),
 
   // Smart Template Downloads
-  downloadTemplateSimple: (stationId?: string, variableCode?: string) => {
+  downloadTemplateSimple: (stationId?: string, variableCode?: string, sourceCode?: string) => {
     const params = new URLSearchParams();
     if (stationId) params.append('station_id', stationId);
     if (variableCode) params.append('variable_code', variableCode);
-    return axiosInstance.get(`/admin/templates/simple?${params.toString()}`, { responseType: 'blob' });
+    if (sourceCode) params.append('source_code', sourceCode);
+    const query = params.toString();
+    return axiosInstance.get(`/admin/templates/simple${query ? `?${query}` : ''}`, {
+      responseType: 'blob',
+      timeout: 15000,
+    });
   },
-  downloadTemplateMultiVariable: (stationId?: string) => {
-    const params = stationId ? `?station_id=${stationId}` : '';
-    return axiosInstance.get(`/admin/templates/multi-variable${params}`, { responseType: 'blob' });
+  downloadTemplateSimpleMultiSource: (stationId?: string, variableCode?: string, sourceCodes?: string[]) => {
+    const params = new URLSearchParams();
+    if (stationId) params.append('station_id', stationId);
+    if (variableCode) params.append('variable_code', variableCode);
+    if (sourceCodes?.length) params.append('source_codes', sourceCodes.join(','));
+    const query = params.toString();
+    return axiosInstance.get(`/admin/templates/simple-multi-source${query ? `?${query}` : ''}`, {
+      responseType: 'blob',
+      timeout: 15000,
+    });
   },
-  downloadTemplateMultiStation: (variableCode?: string) => {
-    const params = variableCode ? `?variable_code=${variableCode}` : '';
-    return axiosInstance.get(`/admin/templates/multi-station${params}`, { responseType: 'blob' });
+  downloadTemplateMultiVariable: (stationId?: string, sourceCode?: string) => {
+    const params = new URLSearchParams();
+    if (stationId) params.append('station_id', stationId);
+    if (sourceCode) params.append('source_code', sourceCode);
+    const query = params.toString();
+    return axiosInstance.get(`/admin/templates/multi-variable${query ? `?${query}` : ''}`, {
+      responseType: 'blob',
+      timeout: 15000,
+    });
+  },
+  downloadTemplateMultiVariableMultiSource: (stationId?: string, sourceCodes?: string[]) => {
+    const params = new URLSearchParams();
+    if (stationId) params.append('station_id', stationId);
+    if (sourceCodes?.length) params.append('source_codes', sourceCodes.join(','));
+    const query = params.toString();
+    return axiosInstance.get(`/admin/templates/multi-variable-multi-source${query ? `?${query}` : ''}`, {
+      responseType: 'blob',
+      timeout: 15000,
+    });
+  },
+  downloadTemplateMultiStation: (variableCode?: string, sourceCode?: string) => {
+    const params = new URLSearchParams();
+    if (variableCode) params.append('variable_code', variableCode);
+    if (sourceCode) params.append('source_code', sourceCode);
+    const query = params.toString();
+    return axiosInstance.get(`/admin/templates/multi-station${query ? `?${query}` : ''}`, {
+      responseType: 'blob',
+      timeout: 15000,
+    });
+  },
+  downloadTemplateMultiBasin: (variableCode?: string, sourceCode?: string) => {
+    const params = new URLSearchParams();
+    if (variableCode) params.append('variable_code', variableCode);
+    if (sourceCode) params.append('source_code', sourceCode);
+    const query = params.toString();
+    return axiosInstance.get(`/admin/templates/multi-bassin${query ? `?${query}` : ''}`, {
+      responseType: 'blob',
+      timeout: 15000,
+    });
   },
 });

@@ -1,25 +1,61 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, Query, Response
+﻿from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, Query, Response
 from typing import List, Optional, Any, Dict
 from fastapi.responses import StreamingResponse
-from . import dashboard, sites, data_availability, ts_management, auth
 from pydantic import BaseModel
 from app.core.config import settings
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from app.db.session import get_db
 import os
+import sys
 import shutil
 import tempfile
 import zipfile
-import geopandas as gpd
 import json
 import csv
 import io
+import re
 from datetime import datetime, timedelta
 
 
 
 router = APIRouter()
+
+
+def _ensure_openpyxl_available() -> None:
+    """
+    Ensure openpyxl is importable for template generation.
+    Falls back to common Conda site-packages paths on Windows when backend
+    is started with a different Python interpreter.
+    """
+    try:
+        import openpyxl  # noqa: F401
+        return
+    except ModuleNotFoundError:
+        pass
+
+    fallback_paths = []
+    conda_prefix = os.environ.get("CONDA_PREFIX")
+    if conda_prefix:
+        fallback_paths.append(os.path.join(conda_prefix, "Lib", "site-packages"))
+
+    if os.name == "nt":
+        fallback_paths.append(r"C:\anaconda\Lib\site-packages")
+        fallback_paths.append(r"C:\ProgramData\anaconda3\Lib\site-packages")
+
+    for path in fallback_paths:
+        if path and os.path.isdir(path) and path not in sys.path:
+            sys.path.append(path)
+            try:
+                import openpyxl  # noqa: F401
+                return
+            except ModuleNotFoundError:
+                continue
+
+    raise HTTPException(
+        status_code=500,
+        detail="openpyxl is required for Excel templates. Install it in the backend environment.",
+    )
 
 
 # --- Models ---
@@ -244,15 +280,82 @@ async def delete_entity(entity_type: str, entity_id: str, db: AsyncSession = Dep
 
 # --- TEMPLATE GENERATION ---
 
+TEMPLATE_ALLOWED_SOURCE_CODES = {"OBS", "AROME", "ECMWF", "SIM"}
+TEMPLATE_SOURCE_LABELS = {
+    "OBS": "Observations",
+    "AROME": "Prevision AROME",
+    "ECMWF": "Prevision ECMWF",
+    "SIM": "Simule",
+}
+
+
+def _normalize_template_source_code(source_code: Optional[str]) -> str:
+    normalized = (source_code or "OBS").strip().upper()
+    if normalized == "AUTO":
+        return "OBS"
+    if normalized not in TEMPLATE_ALLOWED_SOURCE_CODES:
+        allowed = ", ".join(sorted(TEMPLATE_ALLOWED_SOURCE_CODES))
+        raise HTTPException(status_code=400, detail=f"Invalid source_code: {normalized}. Allowed: {allowed}")
+    return normalized
+
+
+def _normalize_template_source_codes(source_codes: Optional[str]) -> List[str]:
+    raw = str(source_codes or "").strip()
+    if not raw:
+        return ["OBS"]
+
+    parts = [p.strip().upper() for p in re.split(r"[,\s;|]+", raw) if p and p.strip()]
+    normalized_codes: List[str] = []
+    for part in parts:
+        if part == "AUTO":
+            part = "OBS"
+        if part not in TEMPLATE_ALLOWED_SOURCE_CODES:
+            allowed = ", ".join(sorted(TEMPLATE_ALLOWED_SOURCE_CODES))
+            raise HTTPException(status_code=400, detail=f"Invalid source code: {part}. Allowed: {allowed}")
+        if part not in normalized_codes:
+            normalized_codes.append(part)
+
+    return normalized_codes or ["OBS"]
+
+
+def _source_suffix(source_code: str) -> str:
+    return source_code.strip().lower()
+
+
+def _append_source_suffix(value: Optional[str], source_code: str) -> str:
+    base = str(value or "").strip()
+    if not base:
+        return base
+    suffix = _source_suffix(source_code)
+    normalized = base.lower()
+    if normalized.endswith(f"_{suffix}"):
+        return base
+    return f"{base}_{suffix}"
+
+
+def _sources_suffix(source_codes: List[str]) -> str:
+    return "-".join(_source_suffix(code) for code in source_codes)
+
+
+def _format_source_summary(source_codes: List[str]) -> str:
+    return ", ".join(
+        f"{TEMPLATE_SOURCE_LABELS.get(code, code)} ({code})"
+        for code in source_codes
+    )
+
 @router.get("/templates/simple")
 async def get_template_simple(
     station_id: Optional[str] = Query(None),
     variable_code: Optional[str] = Query(None),
+    source_code: Optional[str] = Query("OBS"),
     db: AsyncSession = Depends(get_db)
 ):
     """Generate a pre-filled simple Excel template (one station, one variable)"""
+    _ensure_openpyxl_available()
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment
+    normalized_source = _normalize_template_source_code(source_code)
+    source_label = TEMPLATE_SOURCE_LABELS.get(normalized_source, normalized_source)
     
     # Get station info
     station_name = "STATION_CODE"
@@ -285,7 +388,7 @@ async def get_template_simple(
     # Create Excel
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "Données"
+    ws.title = "DonnÃ©es"
     
     # Style
     header_fill = PatternFill(start_color="1E3A5F", end_color="1E3A5F", fill_type="solid")
@@ -293,17 +396,18 @@ async def get_template_simple(
     info_fill = PatternFill(start_color="E8F4FD", end_color="E8F4FD", fill_type="solid")
     
     # Info row
-    ws["A1"] = f"Station: {station_name} | Variable: {variable_label}"
+    ws["A1"] = f"Station: {station_name} | Variable: {variable_label} | Source: {source_label} ({normalized_source})"
     ws["A1"].font = Font(bold=True, size=12)
     ws["A1"].fill = info_fill
-    ws.merge_cells("A1:C1")
-    
-    ws["A2"] = "Format: timestamp ISO8601, valeur numérique, flag qualité (good/suspect/bad)"
+    ws.merge_cells("A1:C1")    ws["A2"] = (
+        "Format: timestamp ISO8601, valeur numerique, flag qualite (good/suspect/bad) | "
+        f"colonne valeur suffixee: _{_source_suffix(normalized_source)}"
+    )
     ws["A2"].fill = info_fill
     ws.merge_cells("A2:C2")
     
     # Header row
-    headers = ["timestamp", "value", "quality_flag"]
+    headers = ["timestamp", _append_source_suffix("value", normalized_source), "quality_flag"]
     for i, h in enumerate(headers):
         cell = ws.cell(row=3, column=i+1, value=h)
         cell.font = header_font
@@ -321,7 +425,7 @@ async def get_template_simple(
     wb.save(output)
     output.seek(0)
     
-    filename = f"template_simple_{station_name}_{variable_code or 'variable'}.xlsx"
+    filename = f"template_simple_{station_name}_{variable_code or 'variable'}_{normalized_source.lower()}.xlsx"
     
     return Response(
         content=output.getvalue(),
@@ -333,16 +437,21 @@ async def get_template_simple(
 @router.get("/templates/multi-variable")
 async def get_template_multi_variable(
     station_id: Optional[str] = Query(None),
+    source_code: Optional[str] = Query("OBS"),
     db: AsyncSession = Depends(get_db)
 ):
     """Generate Excel template with columns = variables (for one station)"""
+    _ensure_openpyxl_available()
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment
     from openpyxl.utils import get_column_letter
-    
+
+    normalized_source = _normalize_template_source_code(source_code)
+    source_label = TEMPLATE_SOURCE_LABELS.get(normalized_source, normalized_source)
+
     station_name = "STATION"
     station_code = "CODE"
-    
+
     # Get station info
     if station_id:
         try:
@@ -356,53 +465,57 @@ async def get_template_multi_variable(
                 station_code = row["code"] or row["name"]
         except:
             pass
-    
+
     # Get all variables
     variables = []
     try:
         res = await db.execute(text("SELECT code, label, unit FROM ref.variable ORDER BY label"))
         variables = [dict(r) for r in res.mappings().all()]
     except:
-        variables = [{"code": "precip_mm", "label": "Précipitations", "unit": "mm"}]
-    
+        variables = [{"code": "precip_mm", "label": "Precipitations", "unit": "mm"}]
+
     # Create Excel
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "Données"
-    
+    ws.title = "Donnees"
+
     # Style
     header_fill = PatternFill(start_color="1E3A5F", end_color="1E3A5F", fill_type="solid")
     header_font = Font(color="FFFFFF", bold=True)
     info_fill = PatternFill(start_color="E8F4FD", end_color="E8F4FD", fill_type="solid")
-    
+
     # Info row
-    ws["A1"] = f"Station: {station_name} ({station_code})"
+    ws["A1"] = f"Station: {station_name} ({station_code}) | Source: {source_label} ({normalized_source})"
     ws["A1"].font = Font(bold=True, size=12)
     ws["A1"].fill = info_fill
     ws.merge_cells(f"A1:{get_column_letter(len(variables) + 1)}1")
-    
-    ws["A2"] = "Format: timestamp ISO8601 (YYYY-MM-DDTHH:MM:SS), valeurs numériques par colonne variable"
+
+    ws["A2"] = (
+        "Format: timestamp ISO8601 (YYYY-MM-DDTHH:MM:SS), valeurs numeriques par colonne variable | "
+        f"suffixe source: _{_source_suffix(normalized_source)}"
+    )
     ws["A2"].fill = info_fill
     ws.merge_cells(f"A2:{get_column_letter(len(variables) + 1)}2")
-    
+
     # Header row
     ws["A3"] = "timestamp"
     ws["A3"].font = header_font
     ws["A3"].fill = header_fill
     ws["A3"].alignment = Alignment(horizontal="center")
     ws.column_dimensions["A"].width = 22
-    
+
     for i, var in enumerate(variables):
         col = get_column_letter(i + 2)
         cell = ws[f"{col}3"]
-        cell.value = f"{var['code']}\n({var['unit']})"
+        source_code_col = _append_source_suffix(str(var["code"]), normalized_source)
+        cell.value = f"{source_code_col}\n({var['unit']})"
         cell.font = header_font
         cell.fill = header_fill
         cell.alignment = Alignment(horizontal="center", wrap_text=True)
         ws.column_dimensions[col].width = 16
-    
+
     ws.row_dimensions[3].height = 35
-    
+
     # Example rows
     base_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     for i in range(3):
@@ -411,22 +524,22 @@ async def get_template_multi_variable(
         ws[f"A{row_num}"] = dt.strftime("%Y-%m-%dT%H:%M:%S")
         for j in range(len(variables)):
             ws[f"{get_column_letter(j + 2)}{row_num}"] = ""
-    
+
     # Info sheet
     ws_info = wb.create_sheet("Variables")
     ws_info["A1"] = "Code"
     ws_info["B1"] = "Label"
-    ws_info["C1"] = "Unité"
+    ws_info["C1"] = "Unite"
     for i, var in enumerate(variables):
-        ws_info[f"A{i+2}"] = var["code"]
+        ws_info[f"A{i+2}"] = _append_source_suffix(str(var["code"]), normalized_source)
         ws_info[f"B{i+2}"] = var["label"]
         ws_info[f"C{i+2}"] = var["unit"]
-    
+
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
-    
-    filename = f"template_multi_variable_{station_code}.xlsx"
+
+    filename = f"template_multi_variable_{station_code}_{normalized_source.lower()}.xlsx"
     return StreamingResponse(
         output,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -434,19 +547,254 @@ async def get_template_multi_variable(
     )
 
 
-@router.get("/templates/multi-station")
-async def get_template_multi_station(
+@router.get("/templates/simple-multi-source")
+async def get_template_simple_multi_source(
+    station_id: Optional[str] = Query(None),
     variable_code: Optional[str] = Query(None),
-    db: AsyncSession = Depends(get_db)
+    source_codes: Optional[str] = Query("OBS,SIM"),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Generate Excel template with columns = stations (for one variable)"""
+    """Generate a pre-filled simple template with multiple source columns."""
+    _ensure_openpyxl_available()
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment
     from openpyxl.utils import get_column_letter
-    
+
+    normalized_sources = _normalize_template_source_codes(source_codes)
+    source_summary = _format_source_summary(normalized_sources)
+
+    station_name = "STATION_CODE"
+    variable_label = variable_code or "VARIABLE"
+
+    if station_id:
+        try:
+            res = await db.execute(
+                text("SELECT name, code FROM geo.station WHERE station_id = CAST(:id AS UUID)"),
+                {"id": station_id},
+            )
+            row = res.mappings().first()
+            if row:
+                station_name = row["code"] or row["name"]
+        except Exception:
+            pass
+
+    if variable_code:
+        try:
+            res = await db.execute(
+                text("SELECT label, unit FROM ref.variable WHERE code = :code"),
+                {"code": variable_code},
+            )
+            row = res.mappings().first()
+            if row:
+                variable_label = f"{row['label']} ({row['unit']})"
+        except Exception:
+            pass
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Donnees"
+
+    header_fill = PatternFill(start_color="1E3A5F", end_color="1E3A5F", fill_type="solid")
+    header_font = Font(color="FFFFFF", bold=True)
+    info_fill = PatternFill(start_color="E8F4FD", end_color="E8F4FD", fill_type="solid")
+
+    headers = ["timestamp"]
+    for code in normalized_sources:
+        headers.append(_append_source_suffix("value", code))
+        headers.append(_append_source_suffix("quality_flag", code))
+
+    max_col = get_column_letter(len(headers))
+    ws["A1"] = f"Station: {station_name} | Variable: {variable_label} | Sources: {source_summary}"
+    ws["A1"].font = Font(bold=True, size=12)
+    ws["A1"].fill = info_fill
+    ws.merge_cells(f"A1:{max_col}1")
+
+    ws["A2"] = (
+        "Format: timestamp ISO8601, colonnes valeur et qualite par source (good/suspect/bad) | "
+        f"sources: {', '.join(normalized_sources)}"
+    )
+    ws["A2"].fill = info_fill
+    ws.merge_cells(f"A2:{max_col}2")
+
+    for i, header in enumerate(headers):
+        cell = ws.cell(row=3, column=i + 1, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+        ws.column_dimensions[cell.column_letter].width = 22 if i == 0 else 16
+
+    base_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    for i in range(3):
+        dt = base_date - timedelta(days=i)
+        row_values: List[Any] = [dt.strftime("%Y-%m-%dT%H:%M:%S")]
+        for _ in normalized_sources:
+            row_values.extend(["", "good"])
+        ws.append(row_values)
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    filename = (
+        f"template_simple_multi_source_{station_name}_{variable_code or 'variable'}_"
+        f"{_sources_suffix(normalized_sources)}.xlsx"
+    )
+    return Response(
+        content=output.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@router.get("/templates/multi-variable-multi-source")
+async def get_template_multi_variable_multi_source(
+    station_id: Optional[str] = Query(None),
+    source_codes: Optional[str] = Query("OBS,SIM"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate a multi-variable template with one column per variable/source pair."""
+    _ensure_openpyxl_available()
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.utils import get_column_letter
+
+    normalized_sources = _normalize_template_source_codes(source_codes)
+    source_summary = _format_source_summary(normalized_sources)
+
+    station_name = "STATION"
+    station_code = "CODE"
+
+    if station_id:
+        try:
+            res = await db.execute(
+                text("SELECT name, code FROM geo.station WHERE station_id = CAST(:id AS UUID)"),
+                {"id": station_id},
+            )
+            row = res.mappings().first()
+            if row:
+                station_name = row["name"]
+                station_code = row["code"] or row["name"]
+        except Exception:
+            pass
+
+    variables: List[Dict[str, Any]] = []
+    try:
+        res = await db.execute(text("SELECT code, label, unit FROM ref.variable ORDER BY label"))
+        variables = [dict(r) for r in res.mappings().all()]
+    except Exception:
+        variables = [{"code": "precip_mm", "label": "Precipitations", "unit": "mm"}]
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Donnees"
+
+    header_fill = PatternFill(start_color="1E3A5F", end_color="1E3A5F", fill_type="solid")
+    header_font = Font(color="FFFFFF", bold=True)
+    info_fill = PatternFill(start_color="E8F4FD", end_color="E8F4FD", fill_type="solid")
+
+    total_value_columns = max(1, len(variables) * len(normalized_sources))
+    max_col = get_column_letter(total_value_columns + 1)
+    ws["A1"] = f"Station: {station_name} ({station_code}) | Sources: {source_summary}"
+    ws["A1"].font = Font(bold=True, size=12)
+    ws["A1"].fill = info_fill
+    ws.merge_cells(f"A1:{max_col}1")
+
+    ws["A2"] = (
+        "Format: timestamp ISO8601 (YYYY-MM-DDTHH:MM:SS), valeurs numeriques par colonne variable_source "
+        f"(ex: flow_m3s_obs) | sources: {', '.join(normalized_sources)}"
+    )
+    ws["A2"].fill = info_fill
+    ws.merge_cells(f"A2:{max_col}2")
+
+    ws["A3"] = "timestamp"
+    ws["A3"].font = header_font
+    ws["A3"].fill = header_fill
+    ws["A3"].alignment = Alignment(horizontal="center")
+    ws.column_dimensions["A"].width = 22
+
+    col_idx = 2
+    for var in variables:
+        for source in normalized_sources:
+            col_letter = get_column_letter(col_idx)
+            var_with_source = _append_source_suffix(str(var["code"]), source)
+            cell = ws[f"{col_letter}3"]
+            cell.value = f"{var_with_source}\n({var['unit']})"
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center", wrap_text=True)
+            ws.column_dimensions[col_letter].width = 18
+            col_idx += 1
+    ws.row_dimensions[3].height = 40
+
+    base_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    for i in range(3):
+        row_num = 4 + i
+        ws[f"A{row_num}"] = (base_date - timedelta(days=i)).strftime("%Y-%m-%dT%H:%M:%S")
+        for c in range(2, col_idx):
+            ws[f"{get_column_letter(c)}{row_num}"] = ""
+
+    ws_info = wb.create_sheet("Variables")
+    ws_info["A1"] = "Code"
+    ws_info["B1"] = "Source"
+    ws_info["C1"] = "Label"
+    ws_info["D1"] = "Unite"
+    ws_info["E1"] = "Colonne"
+
+    info_row = 2
+    for var in variables:
+        for source in normalized_sources:
+            code_with_source = _append_source_suffix(str(var["code"]), source)
+            ws_info[f"A{info_row}"] = str(var["code"])
+            ws_info[f"B{info_row}"] = source
+            ws_info[f"C{info_row}"] = var["label"]
+            ws_info[f"D{info_row}"] = var["unit"]
+            ws_info[f"E{info_row}"] = code_with_source
+            info_row += 1
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    filename = (
+        f"template_multi_variable_multi_source_{station_code}_"
+        f"{_sources_suffix(normalized_sources)}.xlsx"
+    )
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@router.get("/templates/multi-station")
+async def get_template_multi_station(
+    variable_code: Optional[str] = Query(None),
+    entity_type: str = Query("stations"),
+    source_code: Optional[str] = Query("OBS"),
+    db: AsyncSession = Depends(get_db)
+):
+    """Generate Excel template with columns = stations or bassins (for one variable)."""
+    _ensure_openpyxl_available()
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.utils import get_column_letter
+
+    normalized_source = _normalize_template_source_code(source_code)
+    source_label = TEMPLATE_SOURCE_LABELS.get(normalized_source, normalized_source)
+
+    normalized_entity_type = (entity_type or "stations").lower()
+    if normalized_entity_type == "basins":
+        normalized_entity_type = "bassins"
+    if normalized_entity_type not in ["stations", "bassins"]:
+        raise HTTPException(status_code=400, detail="Invalid entity_type. Allowed: stations, bassins")
+
+    is_basin_template = normalized_entity_type == "bassins"
+    entity_label_singular = "bassin" if is_basin_template else "station"
+    entity_label_plural = "bassins" if is_basin_template else "stations"
+
     variable_label = variable_code or "VARIABLE"
     variable_unit = ""
-    
+
     # Get variable info
     if variable_code:
         try:
@@ -460,79 +808,112 @@ async def get_template_multi_station(
                 variable_unit = row["unit"]
         except:
             pass
-    
-    # Get all stations
-    stations = []
+
+    # Get all entities
+    entities = []
     try:
-        res = await db.execute(text("SELECT station_id, name, code FROM geo.station ORDER BY name"))
-        stations = [dict(r) for r in res.mappings().all()]
+        if is_basin_template:
+            res = await db.execute(text("SELECT basin_id AS entity_id, name, code FROM geo.basin ORDER BY name"))
+            entities = [dict(r) for r in res.mappings().all()]
+        else:
+            res = await db.execute(text("SELECT station_id AS entity_id, name, code FROM geo.station ORDER BY name"))
+            entities = [dict(r) for r in res.mappings().all()]
     except:
-        stations = [{"station_id": "xxx", "name": "Station 1", "code": "S1"}]
-    
+        if is_basin_template:
+            entities = [{"entity_id": "xxx", "name": "Bassin 1", "code": "B1"}]
+        else:
+            entities = [{"entity_id": "xxx", "name": "Station 1", "code": "S1"}]
+
     # Create Excel
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "Données"
-    
+    ws.title = "Donnees"
+
     header_fill = PatternFill(start_color="1E3A5F", end_color="1E3A5F", fill_type="solid")
     header_font = Font(color="FFFFFF", bold=True)
     info_fill = PatternFill(start_color="E8F4FD", end_color="E8F4FD", fill_type="solid")
-    
+
     # Info row
-    ws["A1"] = f"Variable: {variable_label} ({variable_unit})"
+    ws["A1"] = f"Variable: {variable_label} ({variable_unit}) | Source: {source_label} ({normalized_source})"
     ws["A1"].font = Font(bold=True, size=12)
     ws["A1"].fill = info_fill
-    ws.merge_cells(f"A1:{get_column_letter(len(stations) + 1)}1")
-    
-    ws["A2"] = "Format: timestamp ISO8601 (YYYY-MM-DDTHH:MM:SS), valeurs numériques par colonne station (code station en entête)"
+    ws.merge_cells(f"A1:{get_column_letter(len(entities) + 1)}1")
+
+    ws["A2"] = (
+        f"Format: timestamp ISO8601 (YYYY-MM-DDTHH:MM:SS), valeurs numeriques par colonne {entity_label_singular} "
+        f"(code en entete) | suffixe source: _{_source_suffix(normalized_source)}"
+    )
     ws["A2"].fill = info_fill
-    ws.merge_cells(f"A2:{get_column_letter(len(stations) + 1)}2")
-    
+    ws.merge_cells(f"A2:{get_column_letter(len(entities) + 1)}2")
+
     # Header row
     ws["A3"] = "timestamp"
     ws["A3"].font = header_font
     ws["A3"].fill = header_fill
     ws["A3"].alignment = Alignment(horizontal="center")
     ws.column_dimensions["A"].width = 22
-    
-    for i, station in enumerate(stations):
+
+    for i, entity in enumerate(entities):
         col = get_column_letter(i + 2)
         cell = ws[f"{col}3"]
-        cell.value = station.get("code") or station.get("name")
+        entity_code = entity.get("code") or entity.get("name")
+        cell.value = _append_source_suffix(entity_code, normalized_source)
         cell.font = header_font
         cell.fill = header_fill
         cell.alignment = Alignment(horizontal="center", wrap_text=True)
         ws.column_dimensions[col].width = 16
-    
+
     ws.row_dimensions[3].height = 35
-    
+
     # Example rows
     base_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     for i in range(3):
         dt = base_date - timedelta(days=i)
         row_num = 4 + i
         ws[f"A{row_num}"] = dt.strftime("%Y-%m-%dT%H:%M:%S")
-        for j in range(len(stations)):
+        for j in range(len(entities)):
             ws[f"{get_column_letter(j + 2)}{row_num}"] = ""
-    
+
     # Info sheet
-    ws_info = wb.create_sheet("Stations")
+    ws_info = wb.create_sheet("Bassins" if is_basin_template else "Stations")
     ws_info["A1"] = "Code"
     ws_info["B1"] = "Nom"
-    for i, s in enumerate(stations):
-        ws_info[f"A{i+2}"] = s.get("code") or ""
-        ws_info[f"B{i+2}"] = s.get("name") or ""
-    
+    for i, entity in enumerate(entities):
+        entity_code = entity.get("code") or ""
+        ws_info[f"A{i+2}"] = _append_source_suffix(entity_code, normalized_source) if entity_code else ""
+        ws_info[f"B{i+2}"] = entity.get("name") or ""
+
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)
-    
-    filename = f"template_multi_station_{variable_code or 'variable'}.xlsx"
+
+    filename = f"template_multi_{entity_label_plural}_{variable_code or 'variable'}_{normalized_source.lower()}.xlsx"
     return StreamingResponse(
         output,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+
+@router.get("/templates/multi-bassin")
+async def get_template_multi_bassin(
+    variable_code: Optional[str] = Query(None),
+    source_code: Optional[str] = Query("OBS"),
+    db: AsyncSession = Depends(get_db)
+):
+    """Generate Excel template with columns = bassins (for one variable)."""
+    return await get_template_multi_station(
+        variable_code=variable_code,
+        entity_type="bassins",
+        source_code=source_code,
+        db=db,
+    )
+
+
+@router.head("/templates/multi-bassin", include_in_schema=False)
+async def head_template_multi_bassin():
+    """Allow lightweight HEAD checks without triggering a 405."""
+    return Response(status_code=200)
 
 
 # --- SHP UPLOAD ---
@@ -582,6 +963,7 @@ async def upload_shp(
             else:
                 raise HTTPException(status_code=400, detail="File must be .shp or .zip containing shapefile")
 
+            import geopandas as gpd
             gdf = gpd.read_file(shp_file)
             
             if gdf.crs and gdf.crs.to_string() != "EPSG:4326":
@@ -638,13 +1020,13 @@ async def upload_shp(
             def get_station_type(row):
                 # Legacy mapping for safety
                 LEGACY_MAP = {
-                    "pluviometrique": "Poste Pluviométrique",
+                    "pluviometrique": "Poste PluviomÃ©trique",
                     "poste_mesure": "Station hydrologique", 
                     "barrage": "Barrage",
                     "result_point": "point resultats",
                     "limnimetrique": "Station hydrologique",
                     "hydrologique": "Station hydrologique",
-                    "poste pluviométrique": "Poste Pluviométrique",
+                    "poste pluviomÃ©trique": "Poste PluviomÃ©trique",
                     "station hydrologique": "Station hydrologique",
                     "point resultats": "point resultats"
                 }
@@ -652,11 +1034,11 @@ async def upload_shp(
                 import unicodedata
                 
                 if forced_type:
-                    # Normalize input to NFC to ensure 'é' is consistent
+                    # Normalize input to NFC to ensure 'Ã©' is consistent
                     ft_norm = unicodedata.normalize('NFC', forced_type)
                     lower_forced_type = ft_norm.lower().strip()
                     
-                    if "pluvio" in lower_forced_type: return "Poste Pluviométrique"
+                    if "pluvio" in lower_forced_type: return "Poste PluviomÃ©trique"
                     if "barrage" in lower_forced_type: return "Barrage"
                     if "result" in lower_forced_type: return "point resultats"
                     if "hydrologique" in lower_forced_type or "station" in lower_forced_type: return "Station hydrologique"
@@ -671,7 +1053,7 @@ async def upload_shp(
                 
                 print(f"DEBUG TYPE MAPPING: Col={type_col} | Raw='{raw_val}' | Lower='{val}'")
 
-                if "pluvio" in val: return "Poste Pluviométrique"
+                if "pluvio" in val: return "Poste PluviomÃ©trique"
                 if "barrage" in val: return "Barrage"
                 if "hydrologique" in val or "limni" in val or "hydro" in val or "poste" in val: return "Station hydrologique"
                 if "result" in val: return "point resultats"
@@ -772,3 +1154,6 @@ async def upload_shp(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"SHP Processing Error: {str(e)}")
+
+
+

@@ -44,6 +44,13 @@ function downloadBlob(blob: Blob, filename: string) {
     URL.revokeObjectURL(url);
 }
 
+type TemplateDownloadMode =
+    | "simple"
+    | "simple_multi_source"
+    | "multi_variable"
+    | "multi_variable_multi_source"
+    | "multi_station";
+
 export default function DataManagement() {
   const [activeTab, setActiveTab] = useState("stations");
   const queryClient = useQueryClient();
@@ -83,7 +90,7 @@ export default function DataManagement() {
   );
 }
 
-// ─── EntityCrud ──────────────────────────────────────────────────────────────
+// --- EntityCrud --------------------------------------------------------------
 
 function EntityCrud({ type }: { type: string }) {
     const queryClient = useQueryClient();
@@ -280,7 +287,7 @@ function EntityCrud({ type }: { type: string }) {
     );
 }
 
-// ─── EntityFormDialog ─────────────────────────────────────────────────────────
+// --- EntityFormDialog --------------------------------------------------------
 
 function EntityFormDialog({
     type,
@@ -450,7 +457,7 @@ function EntityFormDialog({
     );
 }
 
-// ─── ShpManager ───────────────────────────────────────────────────────────────
+// --- ShpManager --------------------------------------------------------------
 
 function ShpManager() {
     const [file, setFile] = useState<File | null>(null);
@@ -720,13 +727,19 @@ function ShpManager() {
     );
 }
 
-// ─── TimeSeriesManager ────────────────────────────────────────────────────────
+// --- TimeSeriesManager -------------------------------------------------------
 
 function TimeSeriesManager() {
     const queryClient = useQueryClient();
     const [entityType, setEntityType] = useState<"stations" | "bassins">("stations");
     const [selectedVariable, setSelectedVariable] = useState<string>("precip_mm");
     const [selectedStation, setSelectedStation] = useState<string | null>(null);
+    const FALLBACK_VARIABLES = useMemo(() => ([
+        { code: "precip_mm", label: "Pluie", unit: "mm" },
+        { code: "flow_m3s", label: "Debit", unit: "m3/s" },
+        { code: "inflow_m3s", label: "Apport", unit: "m3/s" },
+        { code: "volume_hm3", label: "Volume", unit: "hm3" },
+    ]), []);
     
     // Fetch Basins
     const { data: basins } = useQuery({
@@ -735,7 +748,15 @@ function TimeSeriesManager() {
     });
     const { data: variables } = useQuery({
         queryKey: ['variables'],
-        queryFn: () => api.getVariables().then(res => res.data),
+        retry: false,
+        queryFn: async () => {
+            try {
+                const res = await api.getVariables();
+                return res.data;
+            } catch {
+                return FALLBACK_VARIABLES;
+            }
+        },
     });
 
     const { data: stationsData, isLoading: isLoadingStations } = useQuery({
@@ -803,33 +824,139 @@ function TimeSeriesManager() {
     const [replaceExisting, setReplaceExisting] = useState(false);
     const [importMode, setImportMode] = useState<string>("simple");
     const [selectedSource, setSelectedSource] = useState<string>("OBS");
+    const [selectedTemplateSources, setSelectedTemplateSources] = useState<string[]>(["OBS"]);
     const [deleteSeriesOpen, setDeleteSeriesOpen] = useState(false);
     const [deletePointTarget, setDeletePointTarget] = useState<any>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisReport, setAnalysisReport] = useState<any>(null);
+    const [downloadingTemplate, setDownloadingTemplate] = useState<string | null>(null);
+    const PRECIP_SOURCE_CODES = ["OBS", "AROME", "ECMWF"];
+    const HYDRO_SOURCE_CODES = ["OBS", "SIM"];
+    const SOURCE_LABELS: Record<string, string> = {
+        OBS: "Observations",
+        SIM: "Simule",
+        AROME: "Prevision AROME",
+        ECMWF: "Prevision ECMWF",
+    };
 
-    const allowedSourcesForVariable = useMemo(() => {
-        const sourceList = Array.isArray(sources) ? sources : (sources?.data || []);
-        if (!sourceList.length) return [];
-        
-        const isPrecip = ['precip', 'pluie', 'snow'].some(k => (selectedVariable || '').toLowerCase().includes(k));
-        if (isPrecip) {
-            return sourceList.filter((s: any) => ['OBS', 'AROME', 'ECMWF'].includes(s.code));
-        } else if (['flow_m3s', 'inflow_m3s', 'volume_hm3', 'cote_m', 'volume_k'].includes(selectedVariable || '')) {
-            return sourceList.filter((s: any) => ['OBS', 'SIM'].includes(s.code));
-        }
-        return [];
-    }, [sources, selectedVariable]);
+    const sourceList = useMemo(
+        () => (Array.isArray(sources) ? sources : (sources?.data || [])),
+        [sources]
+    );
+
+    const sourceByCode = useMemo(() => {
+        const map = new Map<string, any>();
+        sourceList.forEach((source: any) => {
+            const code = String(source?.code || "").toUpperCase();
+            if (code) map.set(code, source);
+        });
+        return map;
+    }, [sourceList]);
+
+    const sourceLabel = (code: string | null | undefined) => {
+        const normalizedCode = String(code || "").toUpperCase();
+        if (!normalizedCode) return "-";
+        const fromApi = sourceByCode.get(normalizedCode);
+        return fromApi?.label || SOURCE_LABELS[normalizedCode] || normalizedCode;
+    };
+
+    const isPrecipVariable = useMemo(
+        () => ['precip', 'pluie', 'snow'].some(k => (selectedVariable || '').toLowerCase().includes(k)),
+        [selectedVariable]
+    );
+
+    const isHydroVariable = useMemo(
+        () => ['flow', 'debit', 'inflow', 'apport', 'volume', 'cote', 'lacher'].some(k => (selectedVariable || '').toLowerCase().includes(k)),
+        [selectedVariable]
+    );
+
+    const variableSourceCodes = useMemo(() => {
+        if (isPrecipVariable) return PRECIP_SOURCE_CODES;
+        if (isHydroVariable) return HYDRO_SOURCE_CODES;
+        return ["OBS"];
+    }, [isPrecipVariable, isHydroVariable]);
+
+    const detectedSourceCodesFromAnalysis = useMemo(
+        () => (Array.isArray(analysisReport?.detected_sources) ? analysisReport.detected_sources.map((code: any) => String(code).toUpperCase()) : []),
+        [analysisReport]
+    );
+
+    const selectedSourceLabel = sourceLabel(selectedSource);
+
+    const isAnalysisSuccessful = analysisReport?.status === "success";
+
+    const allowedSourcesForImport = useMemo(() => {
+        return variableSourceCodes.map((code) => {
+            const src = sourceByCode.get(code);
+            return src || { code, label: SOURCE_LABELS[code] || code };
+        });
+    }, [variableSourceCodes, sourceByCode]);
+
+    const allowedSourceCodesForImport = useMemo(
+        () => allowedSourcesForImport.map((src: any) => String(src.code || "").toUpperCase()).filter(Boolean),
+        [allowedSourcesForImport]
+    );
+
+    const orderedTemplateSourceCodes = useMemo(() => {
+        if (allowedSourceCodesForImport.length === 0) return [];
+        const selectedSet = new Set(selectedTemplateSources.map((code) => String(code).toUpperCase()));
+        return allowedSourceCodesForImport.filter((code) => selectedSet.has(code));
+    }, [allowedSourceCodesForImport, selectedTemplateSources]);
+
+    const templateSourceCode = orderedTemplateSourceCodes[0] || selectedSource || allowedSourceCodesForImport[0] || "OBS";
+    const templateSourceCodes = orderedTemplateSourceCodes.length > 0 ? orderedTemplateSourceCodes : [templateSourceCode];
+    const templateSourcesSummary = templateSourceCodes
+        .map((code) => `${code} (${sourceLabel(code)})`)
+        .join(", ");
 
     useEffect(() => {
-        if (['lacher_m3s', 'lachers'].includes(selectedVariable)) {
-            setSelectedSource('ABHS_RES');
-        } else if (allowedSourcesForVariable.length > 0) {
-            if (!allowedSourcesForVariable.find((s: any) => s.code === selectedSource)) {
-                setSelectedSource(allowedSourcesForVariable[0].code);
+        if (allowedSourcesForImport.length > 0) {
+            if (!allowedSourcesForImport.find((s: any) => s.code === selectedSource)) {
+                setSelectedSource(allowedSourcesForImport[0].code);
             }
         }
-    }, [selectedVariable, allowedSourcesForVariable, selectedSource]);
+    }, [allowedSourcesForImport, selectedSource]);
+
+    useEffect(() => {
+        if (allowedSourceCodesForImport.length === 0) {
+            setSelectedTemplateSources([]);
+            return;
+        }
+        setSelectedTemplateSources((prev) => {
+            const normalizedPrev = prev.map((code) => String(code).toUpperCase());
+            const filtered = normalizedPrev.filter((code) => allowedSourceCodesForImport.includes(code));
+            if (filtered.length > 0) {
+                return Array.from(new Set(filtered));
+            }
+            const fallback = allowedSourceCodesForImport.includes(selectedSource)
+                ? selectedSource
+                : allowedSourceCodesForImport[0];
+            return fallback ? [fallback] : [];
+        });
+    }, [allowedSourceCodesForImport, selectedSource]);
+
+    const toggleTemplateSource = useCallback(
+        (sourceCode: string, checked: boolean) => {
+            const normalized = String(sourceCode || "").toUpperCase();
+            if (!normalized) return;
+            setSelectedTemplateSources((prev) => {
+                const current = prev
+                    .map((code) => String(code).toUpperCase())
+                    .filter((code) => allowedSourceCodesForImport.includes(code));
+                if (checked) {
+                    if (current.includes(normalized)) {
+                        return current;
+                    }
+                    return [...current, normalized];
+                }
+                if (current.length <= 1 && current.includes(normalized)) {
+                    return current;
+                }
+                return current.filter((code) => code !== normalized);
+            });
+        },
+        [allowedSourceCodesForImport]
+    );
 
     // Delete single point mutation
     const deletePointMutation = useMutation({
@@ -862,28 +989,39 @@ function TimeSeriesManager() {
         }
     });
 
-    const handleAnalyze = async () => {
-        if (!importFile) return;
+    const analyzeFile = async (fileToAnalyze: File, notify: boolean = true): Promise<any | null> => {
         setIsAnalyzing(true);
         setAnalysisReport(null);
         
         const formData = new FormData();
-        formData.append('file', importFile);
+        formData.append('file', fileToAnalyze);
         formData.append('entity_type', entityType);
+        formData.append('import_mode', importMode);
+        if (selectedStation) formData.append('station_id', selectedStation);
+        if (selectedVariable) formData.append('variable_code', selectedVariable);
         
         try {
             const res = await api.analyzeTimeSeries(formData);
             setAnalysisReport(res.data);
-            if (res.data.status === 'success') {
+            if (notify && res.data.status === 'success') {
                 toast.success(`Analyse terminée: ${res.data.stations_found} stations trouvées`);
-            } else {
+            } else if (notify) {
                 toast.error("Erreur d'analyse: " + res.data.message);
             }
+            return res.data;
         } catch (error: any) {
-             toast.error("Erreur lors de l'analyse: " + (error.response?.data?.detail || error.message));
+            if (notify) {
+                toast.error("Erreur lors de l'analyse: " + (error.response?.data?.detail || error.message));
+            }
+            return null;
         } finally {
             setIsAnalyzing(false);
         }
+    };
+
+    const handleAnalyze = async () => {
+        if (!importFile) return;
+        await analyzeFile(importFile, true);
     };
 
     const handleImport = async () => {
@@ -900,19 +1038,31 @@ function TimeSeriesManager() {
             toast.error("Variable requise pour le mode multi-stations");
             return;
         }
+
+        if (!isAnalysisSuccessful) {
+            const analysisResult = await analyzeFile(importFile, false);
+            if (!analysisResult || analysisResult.status !== 'success') {
+                toast.error("Analyse requise avant import. Cliquez sur Analyser et corrigez les erreurs.");
+                return;
+            }
+        }
         
-        const formData = new FormData();
-        if (selectedStation) formData.append('station_id', selectedStation);
-        if (selectedVariable) formData.append('variable_code', selectedVariable);
-        formData.append('file', importFile);
-        formData.append('import_mode', importMode);
-        formData.append('replace_existing', String(replaceExisting));
-        formData.append('source_code', selectedSource);
-        formData.append('entity_type', entityType);
+        const buildFormData = (sourceCode: string) => {
+            const formData = new FormData();
+            if (selectedStation) formData.append('station_id', selectedStation);
+            if (selectedVariable) formData.append('variable_code', selectedVariable);
+            formData.append('file', importFile);
+            formData.append('import_mode', importMode);
+            formData.append('replace_existing', String(replaceExisting));
+            formData.append('source_code', sourceCode);
+            formData.append('entity_type', entityType);
+            return formData;
+        };
 
         try {
-            await api.uploadTimeSeries(formData);
-            toast.success("Import réussi !");
+            const res = await api.uploadTimeSeries(buildFormData(selectedSource));
+            toast.success(res?.data?.message || "Import reussi !");
+
             setImportOpen(false);
             setImportFile(null);
             queryClient.invalidateQueries({ queryKey: ['ts-data', selectedVariable, selectedStation] });
@@ -923,42 +1073,83 @@ function TimeSeriesManager() {
     };
 
     // Smart template download handlers
-    const handleDownloadTemplate = async (mode: string) => {
+    const handleDownloadTemplate = async (mode: TemplateDownloadMode) => {
+        if (downloadingTemplate) return;
+        setDownloadingTemplate(mode);
         try {
             let res: any;
             let filename: string;
-            
-            if (mode === 'simple') {
+            const sourceCodeForTemplate = templateSourceCode || "OBS";
+            const sourceCodesForTemplate = templateSourceCodes.length > 0 ? templateSourceCodes : [sourceCodeForTemplate];
+
+            if (mode === "simple") {
                 if (!selectedStation || !selectedVariable) {
-                    toast.warning("Sélectionnez une station et une variable pour générer un template pré-rempli");
+                    toast.warning("Selectionnez une station et une variable pour generer un template pre-rempli");
                 }
-                res = await api.downloadTemplateSimple(selectedStation || undefined, selectedVariable || undefined);
-                filename = `template_simple_${selectedStation || 'station'}_${selectedVariable || 'variable'}.xlsx`;
-            } else if (mode === 'multi_variable') {
+                res = await api.downloadTemplateSimple(
+                    selectedStation || undefined,
+                    selectedVariable || undefined,
+                    sourceCodeForTemplate
+                );
+                filename = `template_simple_${selectedStation || "station"}_${selectedVariable || "variable"}_${sourceCodeForTemplate.toLowerCase()}.xlsx`;
+            } else if (mode === "simple_multi_source") {
+                if (!selectedStation || !selectedVariable) {
+                    toast.warning("Selectionnez une station et une variable pour generer un template pre-rempli");
+                }
+                res = await api.downloadTemplateSimpleMultiSource(
+                    selectedStation || undefined,
+                    selectedVariable || undefined,
+                    sourceCodesForTemplate
+                );
+                filename = `template_simple_multi_source_${selectedStation || "station"}_${selectedVariable || "variable"}_${sourceCodesForTemplate.map((s) => s.toLowerCase()).join("-")}.xlsx`;
+            } else if (mode === "multi_variable") {
                 if (!selectedStation) {
-                    toast.warning("Sélectionnez une station pour générer un template pré-rempli");
+                    toast.warning("Selectionnez une station pour generer un template pre-rempli");
                 }
-                res = await api.downloadTemplateMultiVariable(selectedStation || undefined);
-                filename = `template_multi_variable.xlsx`;
+                res = await api.downloadTemplateMultiVariable(selectedStation || undefined, sourceCodeForTemplate);
+                filename = `template_multi_variable_${sourceCodeForTemplate.toLowerCase()}.xlsx`;
+            } else if (mode === "multi_variable_multi_source") {
+                if (!selectedStation) {
+                    toast.warning("Selectionnez une station pour generer un template pre-rempli");
+                }
+                res = await api.downloadTemplateMultiVariableMultiSource(
+                    selectedStation || undefined,
+                    sourceCodesForTemplate
+                );
+                filename = `template_multi_variable_multi_source_${sourceCodesForTemplate.map((s) => s.toLowerCase()).join("-")}.xlsx`;
             } else {
                 if (!selectedVariable) {
-                    toast.warning("Sélectionnez une variable pour générer un template pré-rempli");
+                    toast.warning("Selectionnez une variable pour generer un template pre-rempli");
                 }
-                res = await api.downloadTemplateMultiStation(selectedVariable || undefined);
-                filename = `template_multi_station_${selectedVariable || 'variable'}.xlsx`;
+                if (entityType === "bassins") {
+                    res = await api.downloadTemplateMultiBasin(selectedVariable || undefined, sourceCodeForTemplate);
+                    filename = `template_multi_bassins_${selectedVariable || "variable"}_${sourceCodeForTemplate.toLowerCase()}.xlsx`;
+                } else {
+                    res = await api.downloadTemplateMultiStation(selectedVariable || undefined, sourceCodeForTemplate);
+                    filename = `template_multi_station_${selectedVariable || "variable"}_${sourceCodeForTemplate.toLowerCase()}.xlsx`;
+                }
             }
-            
-            // Extract filename from Content-Disposition header if available
-            const contentDisposition = res.headers?.['content-disposition'];
+
+            const contentDisposition = res.headers?.["content-disposition"];
             if (contentDisposition) {
-                const match = contentDisposition.match(/filename=([^;]+)/);
-                if (match) filename = match[1].trim();
+                const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+                const plainMatch = contentDisposition.match(/filename=\"?([^\";]+)\"?/i);
+                const serverFilename = utf8Match?.[1] ? decodeURIComponent(utf8Match[1]) : plainMatch?.[1];
+                if (serverFilename) {
+                    filename = serverFilename.trim();
+                }
             }
-            
+
             downloadBlob(res.data, filename);
-            toast.success("Template téléchargé !");
+            toast.success(`Template telecharge (sources: ${sourceCodesForTemplate.join(", ")})`);
         } catch (err: any) {
-            toast.error("Erreur lors du téléchargement: " + (err.response?.data?.detail || err.message));
+            if (err?.code === "ECONNABORTED") {
+                toast.error("Le telechargement a expire. Verifiez le backend et reessayez.");
+            } else {
+                toast.error("Erreur lors du telechargement: " + (err.response?.data?.detail || err.message));
+            }
+        } finally {
+            setDownloadingTemplate(null);
         }
     };
 
@@ -977,13 +1168,7 @@ function TimeSeriesManager() {
         timestamp: d.timestamp
     })).reverse() || [];
 
-    const filteredVariables = variables?.filter((v: any) => {
-        if (entityType === "bassins") {
-            const code = v?.code || '';
-            return ['precip_mm', 'pluie', 'precip'].some(k => code.toLowerCase().includes(k));
-        }
-        return true;
-    });
+    const filteredVariables = variables;
 
     const selectedStationInfo = stationsData?.stations?.find((s: any) => s.station_id === selectedStation);
 
@@ -1012,11 +1197,6 @@ function TimeSeriesManager() {
                             onClick={() => {
                                 setEntityType("bassins");
                                 setSelectedStation(null);
-                                // Force selectedVariable to precip_mm if switching to bassins,
-                                // since only precip is allowed for bassins currently.
-                                if (!['precip_mm', 'pluie'].includes(selectedVariable)) {
-                                    setSelectedVariable('precip_mm');
-                                }
                             }}
                         >
                             Bassins
@@ -1064,50 +1244,118 @@ function TimeSeriesManager() {
                     <div className="flex flex-col space-y-3 pt-4 border-t">
                         <div className="flex justify-between items-center flex-wrap gap-2">
                             <Label className="text-sm font-medium">Import de Données</Label>
-                            <div className="flex gap-2 flex-wrap">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <div className="flex items-center gap-2 flex-wrap rounded-md border border-input px-2 py-1">
+                                    <Label className="text-xs text-muted-foreground">Sources canevas</Label>
+                                    {allowedSourcesForImport.map((src: any) => {
+                                        const sourceCode = String(src.code || "").toUpperCase();
+                                        const checked = templateSourceCodes.includes(sourceCode);
+                                        return (
+                                            <label
+                                                key={`template-source-${sourceCode}`}
+                                                className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs ${checked ? "bg-primary/10 text-primary" : "bg-muted/30 text-muted-foreground"}`}
+                                            >
+                                                <Checkbox
+                                                    checked={checked}
+                                                    onCheckedChange={(value) => toggleTemplateSource(sourceCode, value === true)}
+                                                    className="h-3.5 w-3.5"
+                                                />
+                                                <span>{sourceCode}</span>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
                                 <Button
                                     variant="outline"
                                     size="sm"
                                     className="h-8 gap-1"
-                                    onClick={() => handleDownloadTemplate('simple')}
-                                    title={selectedStation && selectedVariable ? `Template pré-rempli pour ${selectedVariable}` : "Sélectionnez station + variable pour pré-remplir"}
+                                    disabled={downloadingTemplate !== null}
+                                    onClick={() => handleDownloadTemplate("simple")}
+                                    title={selectedStation && selectedVariable ? `Template pre-rempli pour ${selectedVariable}` : "Selectionnez station + variable pour pre-remplir"}
                                 >
-                                    <Download className="h-3 w-3" /> Modèle Simple
+                                    {downloadingTemplate === "simple" ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                        <Download className="h-3 w-3" />
+                                    )} Modele Simple
                                     {selectedStation && selectedVariable && <Check className="h-3 w-3 text-green-500 ml-1" />}
                                 </Button>
                                 <Button
                                     variant="outline"
                                     size="sm"
                                     className="h-8 gap-1"
-                                    onClick={() => handleDownloadTemplate('multi_variable')}
-                                    title={selectedStation ? `Template multi-var pour la station sélectionnée` : "Sélectionnez une station pour pré-remplir"}
+                                    disabled={downloadingTemplate !== null}
+                                    onClick={() => handleDownloadTemplate("simple_multi_source")}
+                                    title={selectedStation && selectedVariable ? `Template multi-source pre-rempli pour ${selectedVariable}` : "Selectionnez station + variable pour pre-remplir"}
                                 >
-                                    <Download className="h-3 w-3" /> Modèle Multi-Var
+                                    {downloadingTemplate === "simple_multi_source" ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                        <Download className="h-3 w-3" />
+                                    )} Modele Multi-Source
+                                    {selectedStation && selectedVariable && templateSourceCodes.length > 1 && <Check className="h-3 w-3 text-green-500 ml-1" />}
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 gap-1"
+                                    disabled={downloadingTemplate !== null}
+                                    onClick={() => handleDownloadTemplate("multi_variable")}
+                                    title={selectedStation ? "Template multi-var pour la station selectionnee" : "Selectionnez une station pour pre-remplir"}
+                                >
+                                    {downloadingTemplate === "multi_variable" ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                        <Download className="h-3 w-3" />
+                                    )} Modele Multi-Var
                                     {selectedStation && <Check className="h-3 w-3 text-green-500 ml-1" />}
                                 </Button>
                                 <Button
                                     variant="outline"
                                     size="sm"
                                     className="h-8 gap-1"
-                                    onClick={() => handleDownloadTemplate('multi_station')}
-                                    title={selectedVariable ? `Template multi-stations pour ${selectedVariable}` : "Sélectionnez une variable pour pré-remplir"}
+                                    disabled={downloadingTemplate !== null}
+                                    onClick={() => handleDownloadTemplate("multi_variable_multi_source")}
+                                    title={selectedStation ? "Template multi-var + multi-source pour la station selectionnee" : "Selectionnez une station pour pre-remplir"}
                                 >
-                                    <Download className="h-3 w-3" /> Modèle Multi-Stations
+                                    {downloadingTemplate === "multi_variable_multi_source" ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                        <Download className="h-3 w-3" />
+                                    )} Modele Multi-Var, Multi-Source
+                                    {selectedStation && templateSourceCodes.length > 1 && <Check className="h-3 w-3 text-green-500 ml-1" />}
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 gap-1"
+                                    disabled={downloadingTemplate !== null}
+                                    onClick={() => handleDownloadTemplate("multi_station")}
+                                    title={selectedVariable ? `Template multi-${entityType === "bassins" ? "bassins" : "stations"} pour ${selectedVariable}` : "Selectionnez une variable pour pre-remplir"}
+                                >
+                                    {downloadingTemplate === "multi_station" ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                        <Download className="h-3 w-3" />
+                                    )} {entityType === "bassins" ? "Modele Multi-Bassins" : "Modele Multi-Stations"}
                                     {selectedVariable && <Check className="h-3 w-3 text-green-500 ml-1" />}
                                 </Button>
                                 <Button size="sm" onClick={() => setImportOpen(true)} className="h-8 gap-1">
-                                    <Upload className="h-3 w-3" /> Importer Données
+                                    <Upload className="h-3 w-3" /> Importer Donnees
                                 </Button>
                             </div>
                         </div>
                         
                         {/* Context hint */}
-                        {(selectedStation || selectedVariable) && (
+                        {(selectedStation || selectedVariable || templateSourceCodes.length > 0) && (
                             <div className="text-xs text-muted-foreground bg-muted/30 rounded px-3 py-2 flex items-center gap-2">
                                 <Check className="h-3 w-3 text-green-500 flex-shrink-0" />
                                 Les templates seront pré-remplis avec :
                                 {selectedVariable && <Badge variant="secondary" className="text-xs">{selectedVariable}</Badge>}
                                 {selectedStationInfo && <Badge variant="secondary" className="text-xs">{selectedStationInfo.name}</Badge>}
+                                <Badge variant="secondary" className="text-xs">
+                                    Sources canevas: {templateSourcesSummary}
+                                </Badge>
                             </div>
                         )}
                     </div>
@@ -1252,7 +1500,17 @@ function TimeSeriesManager() {
                     <div className="space-y-4 py-4 overflow-y-auto max-h-[70vh] pr-1">
                         <div className="space-y-2">
                             <Label>Mode d'import</Label>
-                            <RadioGroup value={importMode} onValueChange={setImportMode} className="flex flex-col space-y-1">
+                            <RadioGroup
+                                value={importMode}
+                                onValueChange={(value) => {
+                                    setImportMode(value);
+                                    setAnalysisReport(null);
+                                    if (importFile) {
+                                        void analyzeFile(importFile, false);
+                                    }
+                                }}
+                                className="flex flex-col space-y-1"
+                            >
                                 <div className="flex items-center space-x-2">
                                     <RadioGroupItem value="simple" id="mode-simple" />
                                     <Label htmlFor="mode-simple">Simple (Une Station, Une Variable)</Label>
@@ -1263,7 +1521,11 @@ function TimeSeriesManager() {
                                 </div>
                                 <div className="flex items-center space-x-2">
                                     <RadioGroupItem value="multi_station" id="mode-multistation" />
-                                    <Label htmlFor="mode-multistation">Multi-Stations (Une Variable, Colonnes=Stations)</Label>
+                                    <Label htmlFor="mode-multistation">
+                                        {entityType === "bassins"
+                                            ? "Multi-Bassins (Une Variable, Colonnes=Bassins)"
+                                            : "Multi-Stations (Une Variable, Colonnes=Stations)"}
+                                    </Label>
                                 </div>
                             </RadioGroup>
                         </div>
@@ -1275,22 +1537,28 @@ function TimeSeriesManager() {
                                 type="file" 
                                 accept=".csv,.xlsx,.xls"
                                 onChange={(e) => {
-                                    setImportFile(e.target.files?.[0] || null);
+                                    const nextFile = e.target.files?.[0] || null;
+                                    setImportFile(nextFile);
                                     setAnalysisReport(null);
+                                    if (nextFile) {
+                                        void analyzeFile(nextFile, false);
+                                    }
                                 }} 
                             />
                         </div>
 
-                        {allowedSourcesForVariable.length > 0 && (
+                        {allowedSourcesForImport.length > 0 && (
                             <div className="space-y-2">
                                 <Label>Source de données</Label>
                                 <select 
                                     className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
-                                    value={selectedSource || allowedSourcesForVariable[0]?.code}
+                                    value={selectedSource || allowedSourcesForImport[0]?.code}
                                     onChange={(e) => setSelectedSource(e.target.value)}
                                 >
-                                    {allowedSourcesForVariable.map((src: any) => (
-                                        <option key={src.code} value={src.code}>{src.label}</option>
+                                    {allowedSourcesForImport.map((src: any) => (
+                                        <option key={src.code} value={src.code}>
+                                            {src.code} - {sourceLabel(src.code)}
+                                        </option>
                                     ))}
                                 </select>
                             </div>
@@ -1302,7 +1570,13 @@ function TimeSeriesManager() {
                                 <select 
                                     className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
                                     value={selectedStation || ""}
-                                    onChange={(e) => setSelectedStation(e.target.value || null)}
+                                    onChange={(e) => {
+                                        setSelectedStation(e.target.value || null);
+                                        setAnalysisReport(null);
+                                        if (importFile) {
+                                            void analyzeFile(importFile, false);
+                                        }
+                                    }}
                                 >
                                     <option value="">Sélectionner {entityType === "stations" ? "une station" : "un bassin"}</option>
                                     {allStationsData?.stations
@@ -1323,7 +1597,13 @@ function TimeSeriesManager() {
                                 <select 
                                     className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
                                     value={selectedVariable}
-                                    onChange={(e) => setSelectedVariable(e.target.value)}
+                                    onChange={(e) => {
+                                        setSelectedVariable(e.target.value);
+                                        setAnalysisReport(null);
+                                        if (importFile) {
+                                            void analyzeFile(importFile, false);
+                                        }
+                                    }}
                                 >
                                     {filteredVariables?.map((v: any) => (
                                         <option key={v.code} value={v.code}>{v.label} ({v.unit})</option>
@@ -1364,7 +1644,53 @@ function TimeSeriesManager() {
                                             </div>
                                         </div>
                                     </div>
-                                    
+
+                                    <div className="bg-background p-2.5 rounded border shadow-sm text-xs space-y-1">
+                                        <div>
+                                            <span className="text-muted-foreground">Source d'import choisie:</span>{' '}
+                                            <span className="font-medium">{selectedSource} ({selectedSourceLabel})</span>
+                                        </div>
+                                        {detectedSourceCodesFromAnalysis.length > 0 && (
+                                            <div>
+                                                <span className="text-muted-foreground">Sources detectees dans le fichier:</span>{' '}
+                                                {detectedSourceCodesFromAnalysis
+                                                    .map((code: string) => `${code} (${sourceLabel(code)})`)
+                                                    .join(', ')}
+                                            </div>
+                                        )}
+                                    </div>
+                                    {(analysisReport.detected_families?.length > 0 || analysisReport.suggested_sources?.length > 0) && (
+                                        <div className="bg-background p-2.5 rounded border shadow-sm text-xs space-y-1">
+                                            {analysisReport.detected_families?.length > 0 && (
+                                                <div>
+                                                    <span className="text-muted-foreground">Type détecté:</span>{' '}
+                                                    {analysisReport.detected_families
+                                                        .map((family: string) => (family === 'precip' ? 'Pluie' : family === 'hydro' ? 'Débit/Apport/Volume' : family))
+                                                        .join(', ')}
+                                                </div>
+                                            )}
+                                            {analysisReport.suggested_sources?.length > 0 && (
+                                                <div>
+                                                    <span className="text-muted-foreground">Sources suggérées:</span>{' '}
+                                                    {analysisReport.suggested_sources
+                                                        .map((code: string) => `${code} (${sourceLabel(code)})`)
+                                                        .join(', ')}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {analysisReport.source_policy && (
+                                        <div className="bg-background p-2.5 rounded border shadow-sm text-xs space-y-1">
+                                            <div className="font-medium">Regles de source</div>
+                                            {Object.entries(analysisReport.source_policy).map(([code, rule]) => (
+                                                <div key={code}>
+                                                    <span className="font-medium">{code}:</span> {String(rule)}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                     
                                     {analysisReport.unknown_columns?.length > 0 && (
                                         <div className="text-xs text-amber-700 bg-amber-50 p-2.5 rounded border border-amber-100 flex items-start gap-2">
                                             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
@@ -1373,6 +1699,36 @@ function TimeSeriesManager() {
                                                 <div className="truncate mt-0.5 text-amber-800/80" title={analysisReport.unknown_columns.join(', ')}>
                                                     {analysisReport.unknown_columns.join(', ')}
                                                 </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {analysisReport.column_analysis?.length > 0 && (
+                                        <div className="bg-background p-2.5 rounded border shadow-sm text-xs space-y-1">
+                                            <div className="font-medium">Analyse des colonnes</div>
+                                            <div className="max-h-28 overflow-auto border rounded">
+                                                <table className="w-full text-[11px]">
+                                                    <thead className="bg-muted/60 sticky top-0">
+                                                        <tr>
+                                                            <th className="text-left px-2 py-1">Colonne</th>
+                                                            <th className="text-left px-2 py-1">Variable</th>
+                                                            <th className="text-left px-2 py-1">Source</th>
+                                                            <th className="text-left px-2 py-1">Type</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {analysisReport.column_analysis.slice(0, 20).map((item: any, idx: number) => (
+                                                            <tr key={`${item.column}-${idx}`} className="border-t">
+                                                                <td className="px-2 py-1">{item.column}</td>
+                                                                <td className="px-2 py-1">{item.variable_code || '-'}</td>
+                                                                <td className="px-2 py-1">
+                                                                    {item.source_hint ? `${item.source_hint} (${sourceLabel(item.source_hint)})` : '-'}
+                                                                </td>
+                                                                <td className="px-2 py-1">{item.kind || '-'}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
                                             </div>
                                         </div>
                                     )}
@@ -1420,7 +1776,7 @@ function TimeSeriesManager() {
                             {isAnalyzing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Search className="h-4 w-4 mr-2" />}
                             Analyser
                         </Button>
-                        <Button onClick={handleImport} disabled={!importFile || isAnalyzing}>Importer</Button>
+                        <Button onClick={handleImport} disabled={!importFile || isAnalyzing || !isAnalysisSuccessful}>Importer</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
@@ -1474,3 +1830,8 @@ function TimeSeriesManager() {
         </div>
     );
 }
+
+
+
+
+
