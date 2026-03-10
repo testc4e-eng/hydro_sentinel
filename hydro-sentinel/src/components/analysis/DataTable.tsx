@@ -10,9 +10,17 @@ interface DataTableProps {
   data: TimeseriesData[];
   sources: string[];
   unit: string;
+  columnLabels?: Record<string, string>;
+  firstColumnLabel?: string;
 }
 
-export function DataTable({ data, sources, unit }: DataTableProps) {
+export function DataTable({
+  data,
+  sources,
+  unit,
+  columnLabels,
+  firstColumnLabel = "Date/Heure",
+}: DataTableProps) {
   if (!data || data.length === 0) {
     return (
       <div className="flex items-center justify-center h-96 text-muted-foreground border rounded-lg bg-muted/20">
@@ -35,10 +43,10 @@ export function DataTable({ data, sources, unit }: DataTableProps) {
         <Table>
           <TableHeader className="sticky top-0 bg-background z-10">
             <TableRow>
-              <TableHead className="font-semibold">Date/Heure</TableHead>
+              <TableHead className="font-semibold">{firstColumnLabel}</TableHead>
               {sources.map((source) => (
                 <TableHead key={source} className="font-semibold text-right">
-                  {source} ({unit})
+                  {(columnLabels?.[source] ?? source)} ({unit})
                 </TableHead>
               ))}
             </TableRow>

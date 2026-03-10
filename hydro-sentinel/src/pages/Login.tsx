@@ -21,15 +21,16 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     
-    const formData = new FormData();
-    formData.append('username', email);
-    formData.append('password', password);
+    const formData = new URLSearchParams();
+    formData.append("username", email);
+    formData.append("password", password);
 
     try {
       console.log('🔐 Attempting login with:', email);
       
-      const response = await api.post('/login/access-token', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+      const response = await api.post("/login/access-token", formData, {
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        timeout: 10000,
       });
       
       console.log('✅ Login response:', response);
@@ -51,6 +52,10 @@ export default function Login() {
       if (axios.isAxiosError(error)) {
         console.error('Response data:', error.response?.data);
         console.error('Response status:', error.response?.status);
+        if (error.code === "ECONNABORTED") {
+          toast.error("Le backend ne répond pas (timeout). Vérifiez le serveur API.");
+          return;
+        }
       }
       toast.error("Échec de la connexion. Vérifiez vos identifiants.");
     } finally {

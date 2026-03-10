@@ -17,6 +17,7 @@ export interface UnifiedChartProps {
   selections: CompactVariableSelection[];
   startDate?: string;
   endDate?: string;
+  fallbackBasinId?: string;
   stationName?: string; // Added for dialog title
 }
 
@@ -26,11 +27,35 @@ interface TimeseriesData {
   [key: string]: number | string;
 }
 
+function formatDisplayTime(date: Date): string {
+  return date.toLocaleString('fr-FR', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function addBoundaryPoint(timeMap: Map<string, TimeseriesData>, isoDate?: string) {
+  if (!isoDate) return;
+  const boundaryDate = new Date(isoDate);
+  if (Number.isNaN(boundaryDate.getTime())) return;
+
+  const boundaryIso = boundaryDate.toISOString();
+  if (!timeMap.has(boundaryIso)) {
+    timeMap.set(boundaryIso, {
+      time: boundaryIso,
+      displayTime: formatDisplayTime(boundaryDate),
+    });
+  }
+}
+
 export function UnifiedChart({
   stationId,
   selections,
   startDate,
   endDate,
+  fallbackBasinId,
   stationName,
 }: UnifiedChartProps) {
   const [loading, setLoading] = useState(false);
@@ -67,20 +92,38 @@ export function UnifiedChart({
 
           try {
             const response = await api.get('/measurements/timeseries', { params });
-            
-            if (response.data && Array.isArray(response.data)) {
-              response.data.forEach((point: any) => {
+            let rows = response.data && Array.isArray(response.data) ? response.data : [];
+
+            // Keep dashboard graph consistent with map popup:
+            // for precipitation forecasts, fallback to basin data when station series is empty.
+            const shouldFallbackToBasin =
+              rows.length === 0 &&
+              !!fallbackBasinId &&
+              selection.variableCode === 'precip_mm' &&
+              (selection.sourceCode === 'AROME' || selection.sourceCode === 'ECMWF');
+
+            if (shouldFallbackToBasin) {
+              const basinParams: any = {
+                station_id: fallbackBasinId,
+                variable_code: selection.variableCode,
+                source_code: selection.sourceCode,
+                entity_type: 'bassins',
+              };
+              if (startDate) basinParams.start = startDate;
+              if (endDate) basinParams.end = endDate;
+
+              const basinResponse = await api.get('/measurements/timeseries', { params: basinParams });
+              rows = basinResponse.data && Array.isArray(basinResponse.data) ? basinResponse.data : [];
+            }
+
+            if (rows.length > 0) {
+              rows.forEach((point: any) => {
                 // Use ISO string as key to ensure uniqueness and correct sorting
                 const isoTime = point.time;
                 
                 if (!timeMap.has(isoTime)) {
                    const dateObj = new Date(isoTime);
-                   const displayTime = dateObj.toLocaleString('fr-FR', {
-                      month: '2-digit',
-                      day: '2-digit',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    });
+                   const displayTime = formatDisplayTime(dateObj);
                   timeMap.set(isoTime, { time: isoTime, displayTime });
                 }
                 const existing = timeMap.get(isoTime)!;
@@ -91,6 +134,9 @@ export function UnifiedChart({
             console.error(`Failed to fetch ${key}:`, error);
           }
         }
+
+        addBoundaryPoint(timeMap, startDate);
+        addBoundaryPoint(timeMap, endDate);
 
         const merged = Array.from(timeMap.values());
         // Sort by ISO time string (lexicographically correct for ISO) or timestamps
@@ -103,7 +149,7 @@ export function UnifiedChart({
     };
 
     fetchData();
-  }, [stationId, selections, startDate, endDate]);
+  }, [stationId, selections, startDate, endDate, fallbackBasinId]);
 
   if (loading) {
     return (
@@ -183,6 +229,9 @@ export function UnifiedChart({
             stationId={stationId}
             stationName={stationName}
             selections={selections}
+            fallbackBasinId={fallbackBasinId}
+            startDate={startDate}
+            endDate={endDate}
         />
     </div>
   );

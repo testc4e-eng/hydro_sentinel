@@ -49,7 +49,7 @@ const VARIABLE_GROUPS: VariableGroup[] = [
         label: 'Débit',
         sources: [
           { code: 'OBS', label: 'Observé', color: '#10b981' },
-          { code: 'SIMULE', label: 'Simulé', color: '#f59e0b' },
+          { code: 'SIM', label: 'Simulé', color: '#f59e0b' },
         ],
       },
     ],

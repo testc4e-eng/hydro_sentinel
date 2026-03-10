@@ -23,6 +23,8 @@ interface MapPoint {
   precip_obs_mm: number | null;
   precip_obs_time?: string | null;
   precip_arome_mm?: number | null;
+  precip_ecmwf_mm?: number | null;
+  precip_ecmwf_time?: string | null;
   precip_cum_24h_mm: number | null;
   debit_obs_m3s: number | null;
   debit_sim_m3s: number | null;
@@ -51,10 +53,15 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
   const [points, setPoints] = React.useState<MapPoint[]>([]);
   const [basins, setBasins] = React.useState<any[]>([]);
   const [sourceMode, setSourceMode] = React.useState<'OBS' | 'SIM'>('OBS');
-  const hasSimulatedData = useMemo(
+  const hasHydroSimulatedData = useMemo(
     () => points.some((p) => p.debit_sim_m3s !== null || p.volume_sim_hm3 !== null),
     [points]
   );
+  const hasForecastPrecipData = useMemo(
+    () => points.some((p) => p.precip_arome_mm !== null || p.precip_ecmwf_mm !== null),
+    [points]
+  );
+  const canUseSimulatedSource = mapDisplayMode === 'precip' ? hasForecastPrecipData : hasHydroSimulatedData;
 
   const escapeHtml = (value: unknown): string => {
     if (value === null || value === undefined) return '--';
@@ -69,6 +76,10 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
   const formatNum = (value: number | null | undefined, digits = 1): string => {
     if (value === null || value === undefined || Number.isNaN(value)) return '--';
     return Number(value).toFixed(digits);
+  };
+  const sameNumericValue = (a: number | null | undefined, b: number | null | undefined): boolean => {
+    if (a === null || a === undefined || b === null || b === undefined) return false;
+    return Math.abs(Number(a) - Number(b)) < 1e-9;
   };
 
   const formatDateTime = (value?: string | null): string => {
@@ -95,10 +106,10 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
   };
 
   useEffect(() => {
-    if (!hasSimulatedData && sourceMode === 'SIM') {
+    if (!canUseSimulatedSource && sourceMode === 'SIM') {
       setSourceMode('OBS');
     }
-  }, [hasSimulatedData, sourceMode]);
+  }, [canUseSimulatedSource, sourceMode]);
 
   // Fetch points & basins
   useEffect(() => {
@@ -129,14 +140,32 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
         geometry: { type: 'Point', coordinates: [p.lon, p.lat] },
         properties: {
           ...p,
+          precip_val: sourceMode === 'SIM'
+            ? (p.precip_arome_mm ?? p.precip_ecmwf_mm ?? p.precip_cum_24h_mm ?? p.precip_obs_mm)
+            : (p.precip_cum_24h_mm ?? p.precip_obs_mm),
+          precip_source: sourceMode === 'SIM'
+            ? (
+                p.precip_arome_mm !== null && p.precip_arome_mm !== undefined
+                  ? 'AROME'
+                  : (
+                      p.precip_ecmwf_mm !== null && p.precip_ecmwf_mm !== undefined
+                        ? 'ECMWF'
+                        : 'OBS'
+                    )
+              )
+            : 'OBS',
           displayMode: mapDisplayMode,
           source_mode: sourceMode,
           // Computed dynamic properties based on source mode
-          precip_val: p.precip_cum_24h_mm ?? p.precip_obs_mm,
           debit_val: sourceMode === 'SIM' ? p.debit_sim_m3s : p.debit_obs_m3s,
           volume_val: sourceMode === 'SIM' ? p.volume_sim_hm3 : p.volume_hm3_latest,
           // Pre-calculate display checks to simplify expression
-          hasPrecip: (p.precip_cum_24h_mm ?? p.precip_obs_mm) !== null && (p.precip_cum_24h_mm ?? p.precip_obs_mm) !== undefined,
+          hasPrecip: (sourceMode === 'SIM'
+            ? (p.precip_arome_mm ?? p.precip_ecmwf_mm ?? p.precip_cum_24h_mm ?? p.precip_obs_mm)
+            : (p.precip_cum_24h_mm ?? p.precip_obs_mm)) !== null
+            && (sourceMode === 'SIM'
+              ? (p.precip_arome_mm ?? p.precip_ecmwf_mm ?? p.precip_cum_24h_mm ?? p.precip_obs_mm)
+              : (p.precip_cum_24h_mm ?? p.precip_obs_mm)) !== undefined,
           hasDebit: sourceMode === 'SIM' ? (p.debit_sim_m3s !== null && p.debit_sim_m3s !== undefined) : (p.debit_obs_m3s !== null && p.debit_obs_m3s !== undefined),
           hasVolume: sourceMode === 'SIM' ? (p.volume_sim_hm3 !== null && p.volume_sim_hm3 !== undefined) : (p.volume_hm3_latest !== null && p.volume_hm3_latest !== undefined)
         }
@@ -238,17 +267,17 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
             ['==', ['get', 'displayMode'], 'precip'],
             ['case',
                 ['==', ['get', 'precip_val'], null], '#9ca3af', // Gray only when no data
+                ['<=', ['get', 'precip_val'], 0], '#dbeafe',
+                ['<=', ['get', 'precip_val'], 0.2], '#3b82f6',
                 [
                   'interpolate',
                   ['linear'],
                   ['get', 'precip_val'],
-                  0, '#dbeafe',
-                  0.2, '#93c5fd',
-                  1, '#60a5fa',
-                  5, '#3b82f6',
-                  15, '#1d4ed8',
-                  30, '#1e3a8a',
-                  50, '#4c1d95',
+                  0.2, '#3b82f6',
+                  1, '#2563eb',
+                  5, '#1d4ed8',
+                  15, '#1e3a8a',
+                  30, '#4c1d95',
                   100, '#be185d' // Pink/Red for extreme
                 ]
             ],
@@ -338,7 +367,9 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
         useDashboardStore.getState().setSelectedBasinId(props.station_id);
 
         const coordinates = (feature.geometry as any).coordinates.slice();
-        const sourceModeLabel = dynamicProps.source_mode === 'SIM' ? 'SIM' : 'OBS';
+        const sourceModeLabel = dynamicProps.displayMode === 'precip'
+          ? (dynamicProps.source_mode === 'SIM' ? (dynamicProps.precip_source || 'PREV') : 'OBS')
+          : (dynamicProps.source_mode === 'SIM' ? 'SIM' : 'OBS');
         const basinLabel = props.basin_name
           ? `${escapeHtml(props.basin_name)}${props.basin_code ? ` (${escapeHtml(props.basin_code)})` : ''}`
           : '';
@@ -374,15 +405,20 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
         if (props.precip_arome_mm !== null && props.precip_arome_mm !== undefined) {
           dataRows.push(toRow('Pluie AROME', `${formatNum(props.precip_arome_mm, 1)} mm`));
         }
+        if (props.precip_ecmwf_mm !== null && props.precip_ecmwf_mm !== undefined) {
+          dataRows.push(toRow('Pluie ECMWF', `${formatNum(props.precip_ecmwf_mm, 1)} mm`));
+        }
         if (props.precip_obs_time) dataRows.push(toRow('Date pluie', escapeHtml(formatDateTime(props.precip_obs_time))));
 
         if (dynamicProps.debit_val !== null && dynamicProps.debit_val !== undefined) {
           dataRows.push(toRow(`Debit (${sourceModeLabel})`, `${formatNum(Number(dynamicProps.debit_val), 2)} m3/s`));
         }
-        if (props.debit_obs_m3s !== null && props.debit_obs_m3s !== undefined) {
+        const isActiveObsDebit = dynamicProps.source_mode === 'OBS' && sameNumericValue(props.debit_obs_m3s, Number(dynamicProps.debit_val));
+        const isActiveSimDebit = dynamicProps.source_mode === 'SIM' && sameNumericValue(props.debit_sim_m3s, Number(dynamicProps.debit_val));
+        if (props.debit_obs_m3s !== null && props.debit_obs_m3s !== undefined && !isActiveObsDebit) {
           dataRows.push(toRow('Debit OBS', `${formatNum(props.debit_obs_m3s, 2)} m3/s`));
         }
-        if (props.debit_sim_m3s !== null && props.debit_sim_m3s !== undefined) {
+        if (props.debit_sim_m3s !== null && props.debit_sim_m3s !== undefined && !isActiveSimDebit) {
           dataRows.push(toRow('Debit SIM', `${formatNum(props.debit_sim_m3s, 2)} m3/s`));
         }
         if (props.debit_max_24h_m3s !== null && props.debit_max_24h_m3s !== undefined) {
@@ -402,10 +438,12 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
           if (dynamicProps.volume_val !== null && dynamicProps.volume_val !== undefined) {
             dataRows.push(toRow(`Volume (${sourceModeLabel})`, `${formatNum(Number(dynamicProps.volume_val), 2)} hm3`));
           }
-          if (props.volume_obs_hm3 !== null && props.volume_obs_hm3 !== undefined) {
+          const isActiveObsVolume = dynamicProps.source_mode === 'OBS' && sameNumericValue(props.volume_obs_hm3, Number(dynamicProps.volume_val));
+          const isActiveSimVolume = dynamicProps.source_mode === 'SIM' && sameNumericValue(props.volume_sim_hm3, Number(dynamicProps.volume_val));
+          if (props.volume_obs_hm3 !== null && props.volume_obs_hm3 !== undefined && !isActiveObsVolume) {
             dataRows.push(toRow('Volume OBS', `${formatNum(props.volume_obs_hm3, 2)} hm3`));
           }
-          if (props.volume_sim_hm3 !== null && props.volume_sim_hm3 !== undefined) {
+          if (props.volume_sim_hm3 !== null && props.volume_sim_hm3 !== undefined && !isActiveSimVolume) {
             dataRows.push(toRow('Volume SIM', `${formatNum(props.volume_sim_hm3, 2)} hm3`));
           }
           if (props.volume_hm3_time) dataRows.push(toRow('Date volume', escapeHtml(formatDateTime(props.volume_hm3_time))));
@@ -469,10 +507,10 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
           </button>
           <button 
             onClick={() => setSourceMode('SIM')}
-            disabled={!hasSimulatedData}
-            title={!hasSimulatedData ? 'Aucune donnee simulee disponible' : undefined}
+            disabled={!canUseSimulatedSource}
+            title={!canUseSimulatedSource ? (mapDisplayMode === 'precip' ? 'Aucune prevision disponible' : 'Aucune donnee simulee disponible') : undefined}
             className={`flex-1 text-[10px] py-1 rounded transition-colors ${
-              !hasSimulatedData
+              !canUseSimulatedSource
                 ? 'text-muted-foreground/50 cursor-not-allowed'
                 : sourceMode === 'SIM'
                   ? 'bg-background shadow-sm border font-bold text-foreground'
@@ -482,9 +520,11 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
             Simulé
           </button>
         </div>
-        {!hasSimulatedData && (
+        {!canUseSimulatedSource && (
           <div className="text-[10px] text-muted-foreground px-1 mb-2">
-            Pas de donnees simulees dans la base.
+            {mapDisplayMode === 'precip'
+              ? 'Pas de previsions AROME/ECMWF dans la base.'
+              : 'Pas de donnees simulees dans la base.'}
           </div>
         )}
 

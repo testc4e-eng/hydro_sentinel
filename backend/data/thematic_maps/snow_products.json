@@ -1,0 +1,476 @@
+{
+  "map_type": "snow",
+  "title": "Carte couverture de neige",
+  "description": "Visualisation des zones enneigees/non enneigees et statistiques de couverture neigeuse.",
+  "processing_chain": [
+    {
+      "id": "acquisition",
+      "label": "Acquisition images satellites",
+      "description": "Import des scenes optiques/SAR pour surveillance neige."
+    },
+    {
+      "id": "preprocessing",
+      "label": "Pretraitement",
+      "description": "Correction radiometrique, harmonisation spatiale et correction atmospherique."
+    },
+    {
+      "id": "classification",
+      "label": "Extraction information",
+      "description": "Classification neige/non neige (NDSI, textures, validation)."
+    },
+    {
+      "id": "raster_generation",
+      "label": "Generation raster",
+      "description": "Creation du raster de couverture neigeuse."
+    },
+    {
+      "id": "mask_generation",
+      "label": "Generation masque binaire",
+      "description": "Production du masque neige/non neige."
+    },
+    {
+      "id": "map_rendering",
+      "label": "Affichage cartographique",
+      "description": "Publication des couches raster et masque binaire sur la carte interactive."
+    },
+    {
+      "id": "surface_stats",
+      "label": "Calcul statistiques de surface",
+      "description": "Calcul automatique des surfaces enneigees/non enneigees."
+    }
+  ],
+  "products": [
+    {
+      "id": "snow-2026-02-26-middle-atlas",
+      "event_name": "Episode neigeux fin fevrier 2026",
+      "acquisition_start": "2026-02-25T09:30:00Z",
+      "acquisition_end": "2026-02-26T09:30:00Z",
+      "published_at": "2026-02-26T12:15:00Z",
+      "satellite": "Sentinel-2A",
+      "status": "ready",
+      "bbox": [
+        -5.8,
+        33.4,
+        -4.1,
+        34.4
+      ],
+      "statistics": {
+        "positive_class_label": "Neige",
+        "negative_class_label": "Non neige",
+        "positive_class": {
+          "m2": 104000000,
+          "km2": 104,
+          "hectares": 10400,
+          "percentage": 40
+        },
+        "negative_class": {
+          "m2": 156000000,
+          "km2": 156,
+          "hectares": 15600,
+          "percentage": 60
+        },
+        "total_area_m2": 260000000
+      },
+      "layers": [
+        {
+          "id": "snow-mask-20260226",
+          "name": "Masque neige",
+          "kind": "binary_mask",
+          "source_type": "geojson",
+          "visible": true,
+          "opacity": 0.7,
+          "paint": {
+            "fillColor": "#f8fafc",
+            "outlineColor": "#94a3b8"
+          },
+          "legend": [
+            {
+              "label": "Zones enneigees",
+              "color": "#f8fafc"
+            }
+          ],
+          "geojson": {
+            "type": "FeatureCollection",
+            "features": [
+              {
+                "type": "Feature",
+                "properties": {
+                  "class": "snow"
+                },
+                "geometry": {
+                  "type": "Polygon",
+                  "coordinates": [
+                    [
+                      [
+                        -5.3,
+                        33.95
+                      ],
+                      [
+                        -5,
+                        33.98
+                      ],
+                      [
+                        -4.9,
+                        33.7
+                      ],
+                      [
+                        -5.18,
+                        33.62
+                      ],
+                      [
+                        -5.35,
+                        33.78
+                      ],
+                      [
+                        -5.3,
+                        33.95
+                      ]
+                    ]
+                  ]
+                }
+              },
+              {
+                "type": "Feature",
+                "properties": {
+                  "class": "snow"
+                },
+                "geometry": {
+                  "type": "Polygon",
+                  "coordinates": [
+                    [
+                      [
+                        -4.95,
+                        34.1
+                      ],
+                      [
+                        -4.65,
+                        34.15
+                      ],
+                      [
+                        -4.6,
+                        33.88
+                      ],
+                      [
+                        -4.82,
+                        33.8
+                      ],
+                      [
+                        -5.02,
+                        33.94
+                      ],
+                      [
+                        -4.95,
+                        34.1
+                      ]
+                    ]
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "snow-non-mask-20260226",
+          "name": "Masque non neige",
+          "kind": "binary_mask",
+          "source_type": "geojson",
+          "visible": false,
+          "opacity": 0.2,
+          "paint": {
+            "fillColor": "#334155",
+            "outlineColor": "#0f172a"
+          },
+          "legend": [
+            {
+              "label": "Zones non enneigees",
+              "color": "#334155"
+            }
+          ],
+          "geojson": {
+            "type": "FeatureCollection",
+            "features": [
+              {
+                "type": "Feature",
+                "properties": {
+                  "class": "no_snow"
+                },
+                "geometry": {
+                  "type": "Polygon",
+                  "coordinates": [
+                    [
+                      [
+                        -5.75,
+                        34.35
+                      ],
+                      [
+                        -4.2,
+                        34.3
+                      ],
+                      [
+                        -4.1,
+                        33.45
+                      ],
+                      [
+                        -5.7,
+                        33.4
+                      ],
+                      [
+                        -5.75,
+                        34.35
+                      ]
+                    ]
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "snow-raster-20260226",
+          "name": "Raster couverture neigeuse",
+          "kind": "raster",
+          "source_type": "xyz",
+          "visible": false,
+          "opacity": 0.35,
+          "minzoom": 5,
+          "maxzoom": 14,
+          "tiles": [
+            "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+          ],
+          "legend": [
+            {
+              "label": "Raster resultat",
+              "color": "#e2e8f0"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "snow-2026-01-30-middle-atlas",
+      "event_name": "Episode neigeux janvier 2026",
+      "acquisition_start": "2026-01-29T09:30:00Z",
+      "acquisition_end": "2026-01-30T09:30:00Z",
+      "published_at": "2026-01-30T12:10:00Z",
+      "satellite": "Sentinel-2A",
+      "status": "ready",
+      "bbox": [
+        -5.8,
+        33.4,
+        -4.1,
+        34.4
+      ],
+      "statistics": {
+        "positive_class_label": "Neige",
+        "negative_class_label": "Non neige",
+        "positive_class": {
+          "m2": 60000000,
+          "km2": 60,
+          "hectares": 6000,
+          "percentage": 25
+        },
+        "negative_class": {
+          "m2": 180000000,
+          "km2": 180,
+          "hectares": 18000,
+          "percentage": 75
+        },
+        "total_area_m2": 240000000
+      },
+      "layers": [
+        {
+          "id": "snow-mask-20260130",
+          "name": "Masque neige",
+          "kind": "binary_mask",
+          "source_type": "geojson",
+          "visible": true,
+          "opacity": 0.66,
+          "paint": {
+            "fillColor": "#f1f5f9",
+            "outlineColor": "#64748b"
+          },
+          "legend": [
+            {
+              "label": "Zones enneigees",
+              "color": "#f1f5f9"
+            }
+          ],
+          "geojson": {
+            "type": "FeatureCollection",
+            "features": [
+              {
+                "type": "Feature",
+                "properties": {
+                  "class": "snow"
+                },
+                "geometry": {
+                  "type": "Polygon",
+                  "coordinates": [
+                    [
+                      [
+                        -5.22,
+                        33.93
+                      ],
+                      [
+                        -4.98,
+                        33.95
+                      ],
+                      [
+                        -4.89,
+                        33.76
+                      ],
+                      [
+                        -5.08,
+                        33.67
+                      ],
+                      [
+                        -5.26,
+                        33.8
+                      ],
+                      [
+                        -5.22,
+                        33.93
+                      ]
+                    ]
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "snow-raster-20260130",
+          "name": "Raster couverture neigeuse",
+          "kind": "raster",
+          "source_type": "xyz",
+          "visible": false,
+          "opacity": 0.35,
+          "minzoom": 5,
+          "maxzoom": 14,
+          "tiles": [
+            "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+          ],
+          "legend": [
+            {
+              "label": "Raster resultat",
+              "color": "#cbd5e1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "snow-2025-12-14-middle-atlas",
+      "event_name": "Episode neigeux decembre 2025",
+      "acquisition_start": "2025-12-13T09:40:00Z",
+      "acquisition_end": "2025-12-14T09:40:00Z",
+      "published_at": "2025-12-14T11:55:00Z",
+      "satellite": "Landsat-9",
+      "status": "ready",
+      "bbox": [
+        -5.8,
+        33.4,
+        -4.1,
+        34.4
+      ],
+      "statistics": {
+        "positive_class_label": "Neige",
+        "negative_class_label": "Non neige",
+        "positive_class": {
+          "m2": 130000000,
+          "km2": 130,
+          "hectares": 13000,
+          "percentage": 65
+        },
+        "negative_class": {
+          "m2": 70000000,
+          "km2": 70,
+          "hectares": 7000,
+          "percentage": 35
+        },
+        "total_area_m2": 200000000
+      },
+      "layers": [
+        {
+          "id": "snow-mask-20251214",
+          "name": "Masque neige",
+          "kind": "binary_mask",
+          "source_type": "geojson",
+          "visible": true,
+          "opacity": 0.73,
+          "paint": {
+            "fillColor": "#ffffff",
+            "outlineColor": "#94a3b8"
+          },
+          "legend": [
+            {
+              "label": "Zones enneigees",
+              "color": "#ffffff"
+            }
+          ],
+          "geojson": {
+            "type": "FeatureCollection",
+            "features": [
+              {
+                "type": "Feature",
+                "properties": {
+                  "class": "snow"
+                },
+                "geometry": {
+                  "type": "Polygon",
+                  "coordinates": [
+                    [
+                      [
+                        -5.5,
+                        34.08
+                      ],
+                      [
+                        -4.72,
+                        34.16
+                      ],
+                      [
+                        -4.54,
+                        33.7
+                      ],
+                      [
+                        -5.16,
+                        33.52
+                      ],
+                      [
+                        -5.56,
+                        33.79
+                      ],
+                      [
+                        -5.5,
+                        34.08
+                      ]
+                    ]
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "snow-raster-20251214",
+          "name": "Raster couverture neigeuse",
+          "kind": "raster",
+          "source_type": "xyz",
+          "visible": false,
+          "opacity": 0.33,
+          "minzoom": 5,
+          "maxzoom": 14,
+          "tiles": [
+            "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+          ],
+          "legend": [
+            {
+              "label": "Raster resultat",
+              "color": "#e2e8f0"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

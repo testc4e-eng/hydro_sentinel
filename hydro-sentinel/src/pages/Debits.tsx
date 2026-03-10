@@ -3,6 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { SingleVariableSelector, type VariableSourceSelection } from "@/components/analysis/SingleVariableSelector";
 import { EnhancedMultiSourceChart } from "@/components/analysis/EnhancedMultiSourceChart";
 import { ViewModeToggle, type ViewMode } from "@/components/analysis/ViewModeToggle";
@@ -40,6 +42,8 @@ export default function Debits() {
   });
   const [viewMode, setViewMode] = useState<ViewMode>("graph");
   const [chartType, setChartType] = useState<"line" | "bar">("line");
+  const [continuityEnabled, setContinuityEnabled] = useState(false);
+  const [continuityOrder, setContinuityOrder] = useState<string[]>([OBS_CODE, simulatedSourceCode]);
   const [chartData, setChartData] = useState<any[]>([]);
   const { data: stResult } = useStations({ type: "station" });
   const [selectedStationId, setSelectedStationId] = useState<string>("");
@@ -95,13 +99,27 @@ export default function Debits() {
       case "30d":
         start.setDate(end.getDate() - 30);
         break;
+      case "custom": {
+        const parsedStart = filters.customStart ? new Date(filters.customStart) : null;
+        const parsedEnd = filters.customEnd ? new Date(filters.customEnd) : null;
+        if (parsedStart && !Number.isNaN(parsedStart.getTime())) {
+          start.setTime(parsedStart.getTime());
+        } else {
+          start.setDate(end.getDate() - 7);
+        }
+        if (parsedEnd && !Number.isNaN(parsedEnd.getTime())) {
+          end.setTime(parsedEnd.getTime());
+        }
+        break;
+      }
       default:
         start.setDate(end.getDate() - 7);
     }
     return { start: start.toISOString(), end: end.toISOString() };
-  }, [filters.period]);
+  }, [filters.customEnd, filters.customStart, filters.period]);
 
   const availableVariables = [{ code: "flow_m3s", label: "Débit", unit: "m³/s" }];
+  const continuityDefaultOrder = useMemo(() => [OBS_CODE, simulatedSourceCode], [simulatedSourceCode]);
 
   const availableSources = useMemo(
     () =>
@@ -110,6 +128,45 @@ export default function Debits() {
         .map((s: any) => ({ code: s.code, label: sourceLabelOverrides[s.code] ?? s.label })),
     [allowedSourceCodes, rawSources, sourceLabelOverrides],
   );
+  const sourceLabelByCode = useMemo(() => {
+    const map: Record<string, string> = {};
+    availableSources.forEach((source) => {
+      map[source.code] = source.label;
+    });
+    return map;
+  }, [availableSources]);
+
+  useEffect(() => {
+    const selectedSources = variableSelection.sources;
+    if (selectedSources.length < 2) {
+      setContinuityEnabled(false);
+    }
+
+    setContinuityOrder((previousOrder) => {
+      const kept = previousOrder.filter((source) => selectedSources.includes(source));
+      const fromDefault = continuityDefaultOrder.filter(
+        (source) => selectedSources.includes(source) && !kept.includes(source),
+      );
+      const others = selectedSources.filter(
+        (source) => !continuityDefaultOrder.includes(source) && !kept.includes(source),
+      );
+      return [...kept, ...fromDefault, ...others];
+    });
+  }, [continuityDefaultOrder, variableSelection.sources]);
+
+  const handleContinuityOrderChange = (index: number, sourceCode: string) => {
+    setContinuityOrder((previousOrder) => {
+      const fromIndex = previousOrder.indexOf(sourceCode);
+      if (fromIndex === -1 || fromIndex === index) return previousOrder;
+
+      const next = [...previousOrder];
+      [next[index], next[fromIndex]] = [next[fromIndex], next[index]];
+      return next;
+    });
+  };
+
+  const continuityAvailable = variableSelection.sources.length > 1;
+  const continuityActive = continuityAvailable && continuityEnabled;
 
   const st = availableStations.find((s) => s.id === selectedStationId);
 
@@ -157,25 +214,37 @@ export default function Debits() {
               {variableSelection.variableLabel} - {st?.name || "..."}
             </CardTitle>
             <div className="flex items-center gap-2">
-              <div className="flex items-center border rounded-md p-0.5 bg-muted/50 mr-2">
-                <Button
-                  variant={chartType === "line" ? "secondary" : "ghost"}
-                  size="sm"
-                  className="h-6 w-6 p-0"
-                  onClick={() => setChartType("line")}
-                  title="Courbe"
-                >
-                  <LineChart className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant={chartType === "bar" ? "secondary" : "ghost"}
-                  size="sm"
-                  className="h-6 w-6 p-0"
-                  onClick={() => setChartType("bar")}
-                  title="Bâtonnets"
-                >
-                  <BarChart3 className="h-4 w-4" />
-                </Button>
+              <div className="flex items-center gap-2 mr-2">
+                <div className="flex items-center border rounded-md p-0.5 bg-muted/50">
+                  <Button
+                    variant={chartType === "line" ? "secondary" : "ghost"}
+                    size="sm"
+                    className="h-6 w-6 p-0"
+                    onClick={() => setChartType("line")}
+                    title="Courbe"
+                  >
+                    <LineChart className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={chartType === "bar" ? "secondary" : "ghost"}
+                    size="sm"
+                    className="h-6 w-6 p-0"
+                    onClick={() => setChartType("bar")}
+                    title="Bâtonnets"
+                  >
+                    <BarChart3 className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {continuityAvailable && (
+                  <Label className="flex items-center gap-2 text-xs cursor-pointer px-2 py-1 rounded hover:bg-muted/50">
+                    <Checkbox
+                      checked={continuityEnabled}
+                      onCheckedChange={(checked) => setContinuityEnabled(Boolean(checked))}
+                    />
+                    Mode continuité
+                  </Label>
+                )}
               </div>
               <ViewModeToggle
                 viewMode={viewMode}
@@ -188,17 +257,45 @@ export default function Debits() {
         </CardHeader>
         <CardContent>
           {viewMode === "graph" ? (
-            <EnhancedMultiSourceChart
-              stationId={selectedStationId}
-              variableCode={variableSelection.variableCode}
-              variableLabel={variableSelection.variableLabel}
-              unit={variableSelection.unit}
-              sources={variableSelection.sources}
-              startDate={dateRange.start}
-              endDate={dateRange.end}
-              chartType={chartType}
-              onDataLoaded={setChartData}
-            />
+            <div className="space-y-2">
+              {continuityActive && continuityOrder.length > 1 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Priorité :</span>
+                  {continuityOrder.map((sourceCode, index) => (
+                    <Select
+                      key={`continuity-priority-${index}`}
+                      value={sourceCode}
+                      onValueChange={(nextSourceCode) => handleContinuityOrderChange(index, nextSourceCode)}
+                    >
+                      <SelectTrigger className="h-7 w-[150px] text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {continuityOrder.map((candidateSourceCode) => (
+                          <SelectItem key={`continuity-candidate-${index}-${candidateSourceCode}`} value={candidateSourceCode}>
+                            P{index + 1} - {sourceLabelByCode[candidateSourceCode] || candidateSourceCode}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ))}
+                </div>
+              )}
+
+              <EnhancedMultiSourceChart
+                stationId={selectedStationId}
+                variableCode={variableSelection.variableCode}
+                variableLabel={variableSelection.variableLabel}
+                unit={variableSelection.unit}
+                sources={variableSelection.sources}
+                startDate={dateRange.start}
+                endDate={dateRange.end}
+                chartType={chartType}
+                continuityEnabled={continuityActive}
+                continuityPriority={continuityOrder}
+                onDataLoaded={setChartData}
+              />
+            </div>
           ) : (
             <DataTable
               data={chartData}

@@ -1,0 +1,476 @@
+{
+  "map_type": "flood",
+  "title": "Carte inondation",
+  "description": "Visualisation des zones inondees, historiques temporels et statistiques de surface eau/non eau.",
+  "processing_chain": [
+    {
+      "id": "acquisition",
+      "label": "Acquisition images satellites",
+      "description": "Import des scenes Sentinel/Landsat sur la zone Sebou."
+    },
+    {
+      "id": "preprocessing",
+      "label": "Pretraitement",
+      "description": "Correction geometrique, masquage nuages et harmonisation de la projection."
+    },
+    {
+      "id": "classification",
+      "label": "Extraction information",
+      "description": "Detection eau/non eau par seuils spectraux et/ou SAR."
+    },
+    {
+      "id": "raster_generation",
+      "label": "Generation raster",
+      "description": "Production du raster thematique georeference."
+    },
+    {
+      "id": "mask_generation",
+      "label": "Generation masque binaire",
+      "description": "Creation du masque eau/non eau pour exploitation cartographique."
+    },
+    {
+      "id": "map_rendering",
+      "label": "Affichage cartographique",
+      "description": "Publication des couches raster/masques sur la carte interactive."
+    },
+    {
+      "id": "surface_stats",
+      "label": "Calcul statistiques de surface",
+      "description": "Calcul automatique des surfaces en m2, km2 et hectares."
+    }
+  ],
+  "products": [
+    {
+      "id": "flood-2026-03-06-sebou",
+      "event_name": "Crue Sebou mars 2026",
+      "acquisition_start": "2026-03-05T10:12:00Z",
+      "acquisition_end": "2026-03-06T10:12:00Z",
+      "published_at": "2026-03-06T14:30:00Z",
+      "satellite": "Sentinel-1A",
+      "status": "ready",
+      "bbox": [
+        -6.2,
+        33.9,
+        -4.2,
+        35.2
+      ],
+      "statistics": {
+        "positive_class_label": "Eau",
+        "negative_class_label": "Non eau",
+        "positive_class": {
+          "m2": 48600000,
+          "km2": 48.6,
+          "hectares": 4860,
+          "percentage": 27
+        },
+        "negative_class": {
+          "m2": 131400000,
+          "km2": 131.4,
+          "hectares": 13140,
+          "percentage": 73
+        },
+        "total_area_m2": 180000000
+      },
+      "layers": [
+        {
+          "id": "flood-water-mask-20260306",
+          "name": "Masque eau",
+          "kind": "binary_mask",
+          "source_type": "geojson",
+          "visible": true,
+          "opacity": 0.68,
+          "paint": {
+            "fillColor": "#1d4ed8",
+            "outlineColor": "#1e3a8a"
+          },
+          "legend": [
+            {
+              "label": "Zones inondees",
+              "color": "#1d4ed8"
+            }
+          ],
+          "geojson": {
+            "type": "FeatureCollection",
+            "features": [
+              {
+                "type": "Feature",
+                "properties": {
+                  "class": "water"
+                },
+                "geometry": {
+                  "type": "Polygon",
+                  "coordinates": [
+                    [
+                      [
+                        -5.75,
+                        34.75
+                      ],
+                      [
+                        -5.45,
+                        34.78
+                      ],
+                      [
+                        -5.32,
+                        34.6
+                      ],
+                      [
+                        -5.55,
+                        34.48
+                      ],
+                      [
+                        -5.78,
+                        34.58
+                      ],
+                      [
+                        -5.75,
+                        34.75
+                      ]
+                    ]
+                  ]
+                }
+              },
+              {
+                "type": "Feature",
+                "properties": {
+                  "class": "water"
+                },
+                "geometry": {
+                  "type": "Polygon",
+                  "coordinates": [
+                    [
+                      [
+                        -5.2,
+                        34.42
+                      ],
+                      [
+                        -4.95,
+                        34.45
+                      ],
+                      [
+                        -4.88,
+                        34.28
+                      ],
+                      [
+                        -5.05,
+                        34.14
+                      ],
+                      [
+                        -5.24,
+                        34.22
+                      ],
+                      [
+                        -5.2,
+                        34.42
+                      ]
+                    ]
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "flood-dry-mask-20260306",
+          "name": "Masque non eau",
+          "kind": "binary_mask",
+          "source_type": "geojson",
+          "visible": false,
+          "opacity": 0.2,
+          "paint": {
+            "fillColor": "#facc15",
+            "outlineColor": "#ca8a04"
+          },
+          "legend": [
+            {
+              "label": "Zones non inondees",
+              "color": "#facc15"
+            }
+          ],
+          "geojson": {
+            "type": "FeatureCollection",
+            "features": [
+              {
+                "type": "Feature",
+                "properties": {
+                  "class": "dry"
+                },
+                "geometry": {
+                  "type": "Polygon",
+                  "coordinates": [
+                    [
+                      [
+                        -6.15,
+                        35.15
+                      ],
+                      [
+                        -4.25,
+                        35.1
+                      ],
+                      [
+                        -4.2,
+                        33.95
+                      ],
+                      [
+                        -6.05,
+                        33.9
+                      ],
+                      [
+                        -6.15,
+                        35.15
+                      ]
+                    ]
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "flood-raster-20260306",
+          "name": "Raster inondation",
+          "kind": "raster",
+          "source_type": "xyz",
+          "visible": false,
+          "opacity": 0.35,
+          "minzoom": 5,
+          "maxzoom": 14,
+          "tiles": [
+            "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+          ],
+          "legend": [
+            {
+              "label": "Raster resultat",
+              "color": "#2563eb"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "flood-2026-02-20-sebou",
+      "event_name": "Episode pluvieux 20 fevrier 2026",
+      "acquisition_start": "2026-02-19T10:15:00Z",
+      "acquisition_end": "2026-02-20T10:15:00Z",
+      "published_at": "2026-02-20T16:00:00Z",
+      "satellite": "Sentinel-1A",
+      "status": "ready",
+      "bbox": [
+        -6.2,
+        33.9,
+        -4.2,
+        35.2
+      ],
+      "statistics": {
+        "positive_class_label": "Eau",
+        "negative_class_label": "Non eau",
+        "positive_class": {
+          "m2": 30240000,
+          "km2": 30.24,
+          "hectares": 3024,
+          "percentage": 18
+        },
+        "negative_class": {
+          "m2": 137760000,
+          "km2": 137.76,
+          "hectares": 13776,
+          "percentage": 82
+        },
+        "total_area_m2": 168000000
+      },
+      "layers": [
+        {
+          "id": "flood-water-mask-20260220",
+          "name": "Masque eau",
+          "kind": "binary_mask",
+          "source_type": "geojson",
+          "visible": true,
+          "opacity": 0.62,
+          "paint": {
+            "fillColor": "#2563eb",
+            "outlineColor": "#1e40af"
+          },
+          "legend": [
+            {
+              "label": "Zones inondees",
+              "color": "#2563eb"
+            }
+          ],
+          "geojson": {
+            "type": "FeatureCollection",
+            "features": [
+              {
+                "type": "Feature",
+                "properties": {
+                  "class": "water"
+                },
+                "geometry": {
+                  "type": "Polygon",
+                  "coordinates": [
+                    [
+                      [
+                        -5.62,
+                        34.72
+                      ],
+                      [
+                        -5.35,
+                        34.76
+                      ],
+                      [
+                        -5.3,
+                        34.61
+                      ],
+                      [
+                        -5.5,
+                        34.52
+                      ],
+                      [
+                        -5.64,
+                        34.61
+                      ],
+                      [
+                        -5.62,
+                        34.72
+                      ]
+                    ]
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "flood-raster-20260220",
+          "name": "Raster inondation",
+          "kind": "raster",
+          "source_type": "xyz",
+          "visible": false,
+          "opacity": 0.35,
+          "minzoom": 5,
+          "maxzoom": 14,
+          "tiles": [
+            "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+          ],
+          "legend": [
+            {
+              "label": "Raster resultat",
+              "color": "#3b82f6"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "flood-2025-12-18-sebou",
+      "event_name": "Crue hivernale decembre 2025",
+      "acquisition_start": "2025-12-17T10:40:00Z",
+      "acquisition_end": "2025-12-18T10:40:00Z",
+      "published_at": "2025-12-18T15:10:00Z",
+      "satellite": "Sentinel-1B",
+      "status": "ready",
+      "bbox": [
+        -6.2,
+        33.9,
+        -4.2,
+        35.2
+      ],
+      "statistics": {
+        "positive_class_label": "Eau",
+        "negative_class_label": "Non eau",
+        "positive_class": {
+          "m2": 79800000,
+          "km2": 79.8,
+          "hectares": 7980,
+          "percentage": 38
+        },
+        "negative_class": {
+          "m2": 130200000,
+          "km2": 130.2,
+          "hectares": 13020,
+          "percentage": 62
+        },
+        "total_area_m2": 210000000
+      },
+      "layers": [
+        {
+          "id": "flood-water-mask-20251218",
+          "name": "Masque eau",
+          "kind": "binary_mask",
+          "source_type": "geojson",
+          "visible": true,
+          "opacity": 0.7,
+          "paint": {
+            "fillColor": "#1e3a8a",
+            "outlineColor": "#172554"
+          },
+          "legend": [
+            {
+              "label": "Zones inondees",
+              "color": "#1e3a8a"
+            }
+          ],
+          "geojson": {
+            "type": "FeatureCollection",
+            "features": [
+              {
+                "type": "Feature",
+                "properties": {
+                  "class": "water"
+                },
+                "geometry": {
+                  "type": "Polygon",
+                  "coordinates": [
+                    [
+                      [
+                        -5.8,
+                        34.86
+                      ],
+                      [
+                        -5.25,
+                        34.9
+                      ],
+                      [
+                        -5.1,
+                        34.55
+                      ],
+                      [
+                        -5.45,
+                        34.2
+                      ],
+                      [
+                        -5.9,
+                        34.35
+                      ],
+                      [
+                        -5.8,
+                        34.86
+                      ]
+                    ]
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "flood-raster-20251218",
+          "name": "Raster inondation",
+          "kind": "raster",
+          "source_type": "xyz",
+          "visible": false,
+          "opacity": 0.33,
+          "minzoom": 5,
+          "maxzoom": 14,
+          "tiles": [
+            "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+          ],
+          "legend": [
+            {
+              "label": "Raster resultat",
+              "color": "#1e40af"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

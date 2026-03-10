@@ -20,6 +20,7 @@ interface ConnectionTestResult {
 }
 
 export default function Settings() {
+  const REQUEST_TIMEOUT_MS = 10000;
   const [dbUrl, setDbUrl] = useState("postgresql+asyncpg://postgres:****@localhost:5432/app_inondation_db");
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null);
@@ -36,9 +37,11 @@ export default function Settings() {
     ]);
 
     try {
-      const response = await api.post<ConnectionTestResult>("/admin/test-connection", {
-        database_url: dbUrl
-      });
+      const response = await api.post<ConnectionTestResult>(
+        "/admin/test-connection",
+        { database_url: dbUrl },
+        { timeout: REQUEST_TIMEOUT_MS }
+      );
       
       setTestResult(response.data);
       
@@ -57,7 +60,10 @@ export default function Settings() {
         toast.error("Échec de la connexion");
       }
     } catch (error: any) {
-      const errorMsg = error.response?.data?.detail || error.message || "Erreur inconnue";
+      const errorMsg =
+        error?.code === "ECONNABORTED"
+          ? "Timeout: le backend ne répond pas."
+          : (error.response?.data?.detail || error.message || "Erreur inconnue");
       setTestResult({
         success: false,
         message: errorMsg
@@ -77,7 +83,7 @@ export default function Settings() {
     const time = new Date().toLocaleTimeString();
     
     try {
-      const response = await api.get(url);
+      const response = await api.get(url, { timeout: REQUEST_TIMEOUT_MS });
       const count = Array.isArray(response.data) ? response.data.length : (response.data.items ? response.data.items.length : 'N/A');
       
       let sample = "";
@@ -94,7 +100,10 @@ export default function Settings() {
       
       toast.success(`${label} OK`);
     } catch (error: any) {
-      const errorMsg = error.response?.data?.detail || error.message || "Erreur inconnue";
+      const errorMsg =
+        error?.code === "ECONNABORTED"
+          ? "Timeout: le backend ne répond pas."
+          : (error.response?.data?.detail || error.message || "Erreur inconnue");
       setApiLogs(prev => [{
         time,
         endpoint: url,

@@ -1,0 +1,72 @@
+project:
+  name: "Sebou Basin Monitoring"
+  version: "1.0.0"
+  crs: "EPSG:32629"
+
+basin:
+  # Prefer a real GEE asset for production
+  asset_id: null
+  # Fallback bbox: [xmin, ymin, xmax, ymax] in WGS84
+  bbox_wgs84: [-5.5, 33.5, -4.0, 34.8]
+  allow_fallback_bbox: true
+
+paths:
+  data_root: "./data/sebou_monitoring"
+  raw_data: "./data/sebou_monitoring/raw"
+  processed_data: "./data/sebou_monitoring/processed"
+  products: "./data/sebou_monitoring/products"
+  logs: "./data/sebou_monitoring/logs"
+
+database:
+  host: "localhost"
+  port: 5432
+  database: "sebou_monitoring"
+  user: "sebou_user"
+  password: "${DB_PASSWORD}"
+
+gee:
+  project: "${GEE_PROJECT}"
+  service_account: "${GEE_SERVICE_ACCOUNT}"
+  key_file: "${GEE_KEY_FILE}"
+
+sensors:
+  modis:
+    collection: "MODIS/006/MOD10A1"
+    scale: 500
+  sentinel1:
+    collection: "COPERNICUS/S1_GRD"
+    scale: 10
+  sentinel2:
+    collection: "COPERNICUS/S2_SR_HARMONIZED"
+    scale: 10
+
+processing:
+  snow_detection:
+    ndsi_threshold_high_elev: 0.4
+    ndsi_threshold_mid_elev: 0.5
+    ndsi_threshold_low_elev: 0.6
+    nir_threshold_modis: 0.11
+    nir_threshold_s2: 0.15
+    min_area_pixels: 9
+  flood_detection:
+    sar_difference_threshold: -4.0
+    sar_absolute_threshold: -15.0
+    max_slope: 5.0
+    min_area_pixels: 25
+    optical_mndwi_threshold: 0.3
+    optical_change_threshold: 0.1
+    low_elevation_max_m: 500.0
+
+schedule:
+  daily_processing: "0 6 * * *"
+  validation_check: "0 8 * * *"
+  cleanup_old_data: "0 2 * * 0"
+
+alerts:
+  email:
+    enabled: false
+    recipients: []
+  thresholds:
+    flood_area_critical: 10.0
+    snow_anomaly_zscore: 2.5
+    quality_score_minimum: 70.0

@@ -56,6 +56,16 @@ export const api = Object.assign(axiosInstance, {
   getCompare: (params: any) => axiosInstance.get('/measurements/compare', { params }),
   getKpis: (params: any) => axiosInstance.get('/map/points-kpi', { params }),
   getIngestions: () => axiosInstance.get('/ingestions'),
+  getThematicMapCatalog: (
+    mapType: 'flood' | 'snow',
+    params?: { event?: string; date_from?: string; date_to?: string }
+  ) => axiosInstance.get(`/thematic-maps/${mapType}`, { params }).then((res) => res.data),
+  getThematicMapHistory: (
+    mapType: 'flood' | 'snow',
+    params?: { event?: string; date_from?: string; date_to?: string }
+  ) => axiosInstance.get(`/thematic-maps/${mapType}/history`, { params }).then((res) => res.data),
+  getThematicMapProduct: (mapType: 'flood' | 'snow', productId: string) =>
+    axiosInstance.get(`/thematic-maps/${mapType}/products/${productId}`).then((res) => res.data),
   
   // Ingestion API (Integrated)
   uploadAnalysis: (formData: FormData) => axiosInstance.post('/ingest/analyze', formData, {

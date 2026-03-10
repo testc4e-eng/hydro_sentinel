@@ -1,5 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import type { ThematicMapCatalog, ThematicMapProduct, ThematicMapProductSummary, ThematicMapType } from "@/types/thematicMaps";
+import { getFallbackCatalog, getFallbackHistory, getFallbackProduct } from "@/lib/thematicFallback";
+
+const thematicDemoOnly = String(import.meta.env.VITE_THEMATIC_DEMO_ONLY ?? "false").toLowerCase() === "true";
 
 export function useVariables() {
   return useQuery({ queryKey: ["variables"], queryFn: () => api.getVariables(), staleTime: 5 * 60_000 });
@@ -82,6 +86,53 @@ export function useKpis(params?: { basin_id?: string; window?: string }) {
 
 export function useIngestions() {
   return useQuery({ queryKey: ["ingestions"], queryFn: () => api.getIngestions(), staleTime: 30_000 });
+}
+
+export function useThematicMapCatalog(
+  mapType: ThematicMapType,
+  params?: { event?: string; date_from?: string; date_to?: string },
+) {
+  return useQuery<ThematicMapCatalog>({
+    queryKey: ["thematic-map-catalog", mapType, params],
+    queryFn: async () => {
+      if (thematicDemoOnly) {
+        return getFallbackCatalog(mapType, params);
+      }
+      return await api.getThematicMapCatalog(mapType, params);
+    },
+    staleTime: 60_000,
+  });
+}
+
+export function useThematicMapHistory(
+  mapType: ThematicMapType,
+  params?: { event?: string; date_from?: string; date_to?: string },
+) {
+  return useQuery<ThematicMapProductSummary[]>({
+    queryKey: ["thematic-map-history", mapType, params],
+    queryFn: async () => {
+      if (thematicDemoOnly) {
+        return getFallbackHistory(mapType, params);
+      }
+      return await api.getThematicMapHistory(mapType, params);
+    },
+    staleTime: 60_000,
+  });
+}
+
+export function useThematicMapProduct(mapType: ThematicMapType, productId: string | null) {
+  return useQuery<ThematicMapProduct>({
+    queryKey: ["thematic-map-product", mapType, productId],
+    queryFn: async () => {
+      const targetId = productId as string;
+      if (thematicDemoOnly) {
+        return getFallbackProduct(mapType, targetId);
+      }
+      return await api.getThematicMapProduct(mapType, targetId);
+    },
+    enabled: !!productId,
+    staleTime: 60_000,
+  });
 }
 
 export function useHealth() {

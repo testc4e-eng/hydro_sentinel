@@ -1,0 +1,4064 @@
+{
+  "generated_at_utc": "2026-03-06T18:03:33.241320+00:00",
+  "database_url_redacted": "postgresql+asyncpg://postgres:***@localhost:5432/app_inondation_db",
+  "database_version": "PostgreSQL 17.8 on x86_64-windows, compiled by msvc-19.44.35222, 64-bit",
+  "row_counts": [
+    {
+      "object_name": "api.v_timeseries_basin",
+      "n": 5754
+    },
+    {
+      "object_name": "api.v_timeseries_station",
+      "n": 165177
+    },
+    {
+      "object_name": "geo.basin",
+      "n": 7
+    },
+    {
+      "object_name": "geo.station",
+      "n": 60
+    },
+    {
+      "object_name": "ts.basin_measurement",
+      "n": 5754
+    },
+    {
+      "object_name": "ts.measurement",
+      "n": 165177
+    }
+  ],
+  "variables": [
+    {
+      "variable_id": 2,
+      "code": "flow_m3s",
+      "label": "Débit",
+      "unit": "m3/s",
+      "description": "Débit (H/J)"
+    },
+    {
+      "variable_id": 3,
+      "code": "inflow_m3s",
+      "label": "Apports",
+      "unit": "m3/s",
+      "description": "Apport (H/J)"
+    },
+    {
+      "variable_id": 21,
+      "code": "lacher_m3s",
+      "label": "Lâchers",
+      "unit": "m3/s",
+      "description": null
+    },
+    {
+      "variable_id": 1,
+      "code": "precip_mm",
+      "label": "Pluie",
+      "unit": "mm",
+      "description": "Pluie (H/J)"
+    },
+    {
+      "variable_id": 4,
+      "code": "volume_hm3",
+      "label": "Volume",
+      "unit": "hm3",
+      "description": "Vol. (H/J)"
+    }
+  ],
+  "sources": [
+    {
+      "source_id": 5,
+      "code": "ABHS_RES",
+      "label": "RÃ©sultats ABHS (barrages/stations)",
+      "source_type": "simulated",
+      "provider": "ABHS",
+      "description": "RÃ©sultats consolidÃ©s (mÃ©tier / modÃ¨le)"
+    },
+    {
+      "source_id": 2,
+      "code": "AROME",
+      "label": "PrÃ©visions AROME",
+      "source_type": "forecast",
+      "provider": "MÃ©tÃ©o / AROME",
+      "description": null
+    },
+    {
+      "source_id": 3,
+      "code": "ECMWF",
+      "label": "PrÃ©visions ECMWF",
+      "source_type": "forecast",
+      "provider": "ECMWF",
+      "description": null
+    },
+    {
+      "source_id": 1,
+      "code": "OBS",
+      "label": "Observations",
+      "source_type": "observed",
+      "provider": "ABHS",
+      "description": null
+    },
+    {
+      "source_id": 8,
+      "code": "SIM",
+      "label": "SimulÃ©",
+      "source_type": "simulated",
+      "provider": "INTERNAL",
+      "description": null
+    }
+  ],
+  "station_types": [
+    {
+      "station_type": "Barrage",
+      "station_count": 16
+    },
+    {
+      "station_type": "point resultats",
+      "station_count": 2
+    },
+    {
+      "station_type": "Poste Pluviométrique",
+      "station_count": 5
+    },
+    {
+      "station_type": "Station hydrologique",
+      "station_count": 37
+    }
+  ],
+  "stations_total": 60,
+  "stations_with_data": 56,
+  "basins_total": 7,
+  "basins_with_data": 7,
+  "station_combo_global": [
+    {
+      "variable_code": "flow_m3s",
+      "source_code": "OBS",
+      "record_count": 54353,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-26T08:00:00+00:00"
+    },
+    {
+      "variable_code": "flow_m3s",
+      "source_code": "SIM",
+      "record_count": 2955,
+      "first_record": "2026-01-01T00:00:00+00:00",
+      "last_record": "2026-03-19T23:00:00+00:00"
+    },
+    {
+      "variable_code": "inflow_m3s",
+      "source_code": "SIM",
+      "record_count": 1872,
+      "first_record": "2026-01-01T00:00:00+00:00",
+      "last_record": "2026-03-19T23:00:00+00:00"
+    },
+    {
+      "variable_code": "lacher_m3s",
+      "source_code": "SIM",
+      "record_count": 1872,
+      "first_record": "2026-01-01T00:00:00+00:00",
+      "last_record": "2026-03-19T23:00:00+00:00"
+    },
+    {
+      "variable_code": "precip_mm",
+      "source_code": "ECMWF",
+      "record_count": 1074,
+      "first_record": "2026-02-26T01:00:00+00:00",
+      "last_record": "2026-03-20T00:00:00+00:00"
+    },
+    {
+      "variable_code": "precip_mm",
+      "source_code": "OBS",
+      "record_count": 82237,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-03-05T14:00:00+00:00"
+    },
+    {
+      "variable_code": "volume_hm3",
+      "source_code": "OBS",
+      "record_count": 18942,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T11:00:00+00:00"
+    },
+    {
+      "variable_code": "volume_hm3",
+      "source_code": "SIM",
+      "record_count": 1872,
+      "first_record": "2026-01-01T00:00:00+00:00",
+      "last_record": "2026-03-19T23:00:00+00:00"
+    }
+  ],
+  "basin_combo_global": [
+    {
+      "variable_code": "precip_mm",
+      "source_code": "AROME",
+      "record_count": 2520,
+      "first_record": "2026-02-26T01:00:00+00:00",
+      "last_record": "2026-03-13T00:00:00+00:00"
+    },
+    {
+      "variable_code": "precip_mm",
+      "source_code": "ECMWF",
+      "record_count": 2520,
+      "first_record": "2026-02-26T01:00:00+00:00",
+      "last_record": "2026-03-13T00:00:00+00:00"
+    },
+    {
+      "variable_code": "precip_mm",
+      "source_code": "OBS",
+      "record_count": 714,
+      "first_record": "2026-02-26T01:00:00+00:00",
+      "last_record": "2026-03-02T06:00:00+00:00"
+    }
+  ],
+  "expected_station_combos_by_type": {
+    "Barrage": [
+      {
+        "variable_code": "flow_m3s",
+        "source_code": "OBS"
+      },
+      {
+        "variable_code": "flow_m3s",
+        "source_code": "SIM"
+      },
+      {
+        "variable_code": "inflow_m3s",
+        "source_code": "SIM"
+      },
+      {
+        "variable_code": "lacher_m3s",
+        "source_code": "SIM"
+      },
+      {
+        "variable_code": "precip_mm",
+        "source_code": "ECMWF"
+      },
+      {
+        "variable_code": "precip_mm",
+        "source_code": "OBS"
+      },
+      {
+        "variable_code": "volume_hm3",
+        "source_code": "OBS"
+      },
+      {
+        "variable_code": "volume_hm3",
+        "source_code": "SIM"
+      }
+    ],
+    "Poste Pluviométrique": [
+      {
+        "variable_code": "precip_mm",
+        "source_code": "ECMWF"
+      },
+      {
+        "variable_code": "precip_mm",
+        "source_code": "OBS"
+      }
+    ],
+    "Station hydrologique": [
+      {
+        "variable_code": "flow_m3s",
+        "source_code": "OBS"
+      },
+      {
+        "variable_code": "flow_m3s",
+        "source_code": "SIM"
+      },
+      {
+        "variable_code": "precip_mm",
+        "source_code": "ECMWF"
+      },
+      {
+        "variable_code": "precip_mm",
+        "source_code": "OBS"
+      }
+    ]
+  },
+  "expected_basin_combos": [
+    {
+      "variable_code": "precip_mm",
+      "source_code": "AROME"
+    },
+    {
+      "variable_code": "precip_mm",
+      "source_code": "ECMWF"
+    },
+    {
+      "variable_code": "precip_mm",
+      "source_code": "OBS"
+    }
+  ],
+  "stations": [
+    {
+      "station_id": "1c5153a0-445e-4f52-b355-d499a4fbeb52",
+      "code": "1",
+      "name": "Aguelmam Sidi Ali",
+      "station_type": "Poste Pluviométrique",
+      "basin_id": "45d0b242-2fe0-48ee-9570-bb012e936c28",
+      "basin_code": "4",
+      "basin_name": "Haut Sebou",
+      "total_records": 1617,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-03-02T06:00:00+00:00",
+      "combos": {
+        "precip_mm::ECMWF": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "ECMWF",
+          "source_label": "PrÃ©visions ECMWF",
+          "source_type": "forecast",
+          "provider": "ECMWF",
+          "record_count": 102,
+          "first_record": "2026-02-26T01:00:00+00:00",
+          "last_record": "2026-03-02T06:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1515,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [],
+      "expected_combo_count": 2,
+      "present_combo_count": 2,
+      "coverage_pct": 100.0
+    },
+    {
+      "station_id": "9a53019e-1a56-49ed-a7aa-67c14158f3f4",
+      "code": "54",
+      "name": "Ain Aicha",
+      "station_type": "Station hydrologique",
+      "basin_id": "3645c19b-971f-495f-9b17-1f1693b8340e",
+      "basin_code": "1",
+      "basin_name": "Ouergha",
+      "total_records": 3534,
+      "first_record": "2026-01-01T00:00:00+00:00",
+      "last_record": "2026-03-20T00:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 564,
+          "first_record": "2026-02-02T21:00:00+00:00",
+          "last_record": "2026-02-26T08:00:00+00:00"
+        },
+        "flow_m3s::SIM": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "SIM",
+          "source_label": "SimulÃ©",
+          "source_type": "simulated",
+          "provider": "INTERNAL",
+          "record_count": 1083,
+          "first_record": "2026-02-02T21:00:00+00:00",
+          "last_record": "2026-03-19T23:00:00+00:00"
+        },
+        "precip_mm::ECMWF": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "ECMWF",
+          "source_label": "PrÃ©visions ECMWF",
+          "source_type": "forecast",
+          "provider": "ECMWF",
+          "record_count": 360,
+          "first_record": "2026-03-05T01:00:00+00:00",
+          "last_record": "2026-03-20T00:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1527,
+          "first_record": "2026-01-01T00:00:00+00:00",
+          "last_record": "2026-03-05T14:00:00+00:00"
+        }
+      },
+      "missing_combos": [],
+      "expected_combo_count": 4,
+      "present_combo_count": 4,
+      "coverage_pct": 100.0
+    },
+    {
+      "station_id": "725b507f-fa16-4e9f-83b0-4562c02f18ed",
+      "code": "51",
+      "name": "Ain El Ouali",
+      "station_type": "Station hydrologique",
+      "basin_id": "45d0b242-2fe0-48ee-9570-bb012e936c28",
+      "basin_code": "4",
+      "basin_name": "Haut Sebou",
+      "total_records": 3129,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T11:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1614,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1515,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 2,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "9135a11d-7405-484d-abe4-9d505f73c75f",
+      "code": "50",
+      "name": "Ain Sebou",
+      "station_type": "Station hydrologique",
+      "basin_id": "45d0b242-2fe0-48ee-9570-bb012e936c28",
+      "basin_code": "4",
+      "basin_name": "Haut Sebou",
+      "total_records": 3104,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T11:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1617,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1487,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 2,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "53c3afb0-fbf5-45c7-8307-57f195359293",
+      "code": "2",
+      "name": "Ait Khabbach",
+      "station_type": "Station hydrologique",
+      "basin_id": "45d0b242-2fe0-48ee-9570-bb012e936c28",
+      "basin_code": "4",
+      "basin_name": "Haut Sebou",
+      "total_records": 3243,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-03-02T06:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1620,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        },
+        "precip_mm::ECMWF": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "ECMWF",
+          "source_label": "PrÃ©visions ECMWF",
+          "source_type": "forecast",
+          "provider": "ECMWF",
+          "record_count": 102,
+          "first_record": "2026-02-26T01:00:00+00:00",
+          "last_record": "2026-03-02T06:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1521,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 3,
+      "coverage_pct": 75.0
+    },
+    {
+      "station_id": "3a47613d-4093-4b15-be03-c507df06553a",
+      "code": "4",
+      "name": "Azibe Soltane",
+      "station_type": "Station hydrologique",
+      "basin_id": "e32115cf-7d84-4df3-99cb-ccacbd3cc065",
+      "basin_code": "6",
+      "basin_name": "moyen sebou",
+      "total_records": 3245,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-03-02T06:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1620,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        },
+        "precip_mm::ECMWF": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "ECMWF",
+          "source_label": "PrÃ©visions ECMWF",
+          "source_type": "forecast",
+          "provider": "ECMWF",
+          "record_count": 102,
+          "first_record": "2026-02-26T01:00:00+00:00",
+          "last_record": "2026-03-02T06:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1523,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 3,
+      "coverage_pct": 75.0
+    },
+    {
+      "station_id": "a53ae6d0-c5a0-4770-b81c-494bc38817b0",
+      "code": "52",
+      "name": "Azzaba",
+      "station_type": "Station hydrologique",
+      "basin_id": "45d0b242-2fe0-48ee-9570-bb012e936c28",
+      "basin_code": "4",
+      "basin_name": "Haut Sebou",
+      "total_records": 3143,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T11:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1620,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1523,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 2,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "97820f63-1c62-421d-94b5-dab234dc7f2a",
+      "code": "5",
+      "name": "Bab Chhoub",
+      "station_type": "Station hydrologique",
+      "basin_id": "1e2160e9-139b-48b9-a7e9-72cf3e96bd62",
+      "basin_code": "5",
+      "basin_name": "lebene",
+      "total_records": 3244,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-03-02T06:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1620,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        },
+        "precip_mm::ECMWF": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "ECMWF",
+          "source_label": "PrÃ©visions ECMWF",
+          "source_type": "forecast",
+          "provider": "ECMWF",
+          "record_count": 102,
+          "first_record": "2026-02-26T01:00:00+00:00",
+          "last_record": "2026-03-02T06:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1522,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 3,
+      "coverage_pct": 75.0
+    },
+    {
+      "station_id": "314c4ef6-4f61-468e-a3d2-7e4edf5b5c0e",
+      "code": "6",
+      "name": "Bab Merzouka",
+      "station_type": "Station hydrologique",
+      "basin_id": "1e2160e9-139b-48b9-a7e9-72cf3e96bd62",
+      "basin_code": "5",
+      "basin_name": "lebene",
+      "total_records": 3229,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-03-02T06:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1613,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        },
+        "precip_mm::ECMWF": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "ECMWF",
+          "source_label": "PrÃ©visions ECMWF",
+          "source_type": "forecast",
+          "provider": "ECMWF",
+          "record_count": 102,
+          "first_record": "2026-02-26T01:00:00+00:00",
+          "last_record": "2026-03-02T06:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1514,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 3,
+      "coverage_pct": 75.0
+    },
+    {
+      "station_id": "e3fd8ec9-b489-40eb-a41e-81dab24847f0",
+      "code": "7",
+      "name": "Bab Ouender",
+      "station_type": "Station hydrologique",
+      "basin_id": "3645c19b-971f-495f-9b17-1f1693b8340e",
+      "basin_code": "1",
+      "basin_name": "Ouergha",
+      "total_records": 2594,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-03-02T06:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1223,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T08:00:00+00:00"
+        },
+        "precip_mm::ECMWF": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "ECMWF",
+          "source_label": "PrÃ©visions ECMWF",
+          "source_type": "forecast",
+          "provider": "ECMWF",
+          "record_count": 102,
+          "first_record": "2026-02-26T01:00:00+00:00",
+          "last_record": "2026-03-02T06:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1269,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T09:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 3,
+      "coverage_pct": 75.0
+    },
+    {
+      "station_id": "bea097c7-e3d2-43dc-abd2-7fd8116e83a3",
+      "code": "8",
+      "name": "Bab Taza",
+      "station_type": "Poste Pluviométrique",
+      "basin_id": "3645c19b-971f-495f-9b17-1f1693b8340e",
+      "basin_code": "1",
+      "basin_name": "Ouergha",
+      "total_records": 1522,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-16T10:00:00+00:00",
+      "combos": {
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1522,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 2,
+      "present_combo_count": 1,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "b74ddcc4-cd6c-447c-bfc9-5f6a9e9923bb",
+      "code": "9",
+      "name": "Belksiri",
+      "station_type": "Station hydrologique",
+      "basin_id": "784737e1-f7bd-4823-9df6-de41df7bdc3b",
+      "basin_code": "2",
+      "basin_name": "bas sebou",
+      "total_records": 3137,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T11:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1618,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1519,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 2,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "05b69e8f-d0a1-4dfa-b1b3-933e3ccb714a",
+      "code": "10",
+      "name": "Bge Al Wahda",
+      "station_type": "Barrage",
+      "basin_id": "3645c19b-971f-495f-9b17-1f1693b8340e",
+      "basin_code": "1",
+      "basin_name": "Ouergha",
+      "total_records": 10624,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-03-19T23:00:00+00:00",
+      "combos": {
+        "flow_m3s::SIM": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "SIM",
+          "source_label": "SimulÃ©",
+          "source_type": "simulated",
+          "provider": "INTERNAL",
+          "record_count": 1872,
+          "first_record": "2026-01-01T00:00:00+00:00",
+          "last_record": "2026-03-19T23:00:00+00:00"
+        },
+        "inflow_m3s::SIM": {
+          "variable_code": "inflow_m3s",
+          "variable_label": "Apports",
+          "variable_unit": "m3/s",
+          "source_code": "SIM",
+          "source_label": "SimulÃ©",
+          "source_type": "simulated",
+          "provider": "INTERNAL",
+          "record_count": 1872,
+          "first_record": "2026-01-01T00:00:00+00:00",
+          "last_record": "2026-03-19T23:00:00+00:00"
+        },
+        "lacher_m3s::SIM": {
+          "variable_code": "lacher_m3s",
+          "variable_label": "Lâchers",
+          "variable_unit": "m3/s",
+          "source_code": "SIM",
+          "source_label": "SimulÃ©",
+          "source_type": "simulated",
+          "provider": "INTERNAL",
+          "record_count": 1872,
+          "first_record": "2026-01-01T00:00:00+00:00",
+          "last_record": "2026-03-19T23:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1518,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        },
+        "volume_hm3::OBS": {
+          "variable_code": "volume_hm3",
+          "variable_label": "Volume",
+          "variable_unit": "hm3",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1618,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T10:00:00+00:00"
+        },
+        "volume_hm3::SIM": {
+          "variable_code": "volume_hm3",
+          "variable_label": "Volume",
+          "variable_unit": "hm3",
+          "source_code": "SIM",
+          "source_label": "SimulÃ©",
+          "source_type": "simulated",
+          "provider": "INTERNAL",
+          "record_count": 1872,
+          "first_record": "2026-01-01T00:00:00+00:00",
+          "last_record": "2026-03-19T23:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "OBS"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 8,
+      "present_combo_count": 6,
+      "coverage_pct": 75.0
+    },
+    {
+      "station_id": "d76c48a5-4c05-44ae-a9fb-68d2a00828b9",
+      "code": "3",
+      "name": "Bge Allal Al Fassi",
+      "station_type": "Barrage",
+      "basin_id": "45d0b242-2fe0-48ee-9570-bb012e936c28",
+      "basin_code": "4",
+      "basin_name": "Haut Sebou",
+      "total_records": 1623,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-03-02T06:00:00+00:00",
+      "combos": {
+        "precip_mm::ECMWF": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "ECMWF",
+          "source_label": "PrÃ©visions ECMWF",
+          "source_type": "forecast",
+          "provider": "ECMWF",
+          "record_count": 102,
+          "first_record": "2026-02-26T01:00:00+00:00",
+          "last_record": "2026-03-02T06:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1521,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "OBS"
+        ],
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "inflow_m3s",
+          "SIM"
+        ],
+        [
+          "lacher_m3s",
+          "SIM"
+        ],
+        [
+          "volume_hm3",
+          "OBS"
+        ],
+        [
+          "volume_hm3",
+          "SIM"
+        ]
+      ],
+      "expected_combo_count": 8,
+      "present_combo_count": 2,
+      "coverage_pct": 25.0
+    },
+    {
+      "station_id": "a116487f-9815-495e-945a-d5a2af20a102",
+      "code": "11",
+      "name": "Bge Asfallou",
+      "station_type": "Barrage",
+      "basin_id": "3645c19b-971f-495f-9b17-1f1693b8340e",
+      "basin_code": "1",
+      "basin_name": "Ouergha",
+      "total_records": 3076,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T10:00:00+00:00",
+      "combos": {
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1488,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        },
+        "volume_hm3::OBS": {
+          "variable_code": "volume_hm3",
+          "variable_label": "Volume",
+          "variable_unit": "hm3",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1588,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "OBS"
+        ],
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "inflow_m3s",
+          "SIM"
+        ],
+        [
+          "lacher_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ],
+        [
+          "volume_hm3",
+          "SIM"
+        ]
+      ],
+      "expected_combo_count": 8,
+      "present_combo_count": 2,
+      "coverage_pct": 25.0
+    },
+    {
+      "station_id": "a13e366f-5b3f-47a7-ad07-12e2bcde364f",
+      "code": "12",
+      "name": "Bge Bab Louta",
+      "station_type": "Barrage",
+      "basin_id": "1e2160e9-139b-48b9-a7e9-72cf3e96bd62",
+      "basin_code": "5",
+      "basin_name": "lebene",
+      "total_records": 2430,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T10:00:00+00:00",
+      "combos": {
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1139,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        },
+        "volume_hm3::OBS": {
+          "variable_code": "volume_hm3",
+          "variable_label": "Volume",
+          "variable_unit": "hm3",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1291,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "OBS"
+        ],
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "inflow_m3s",
+          "SIM"
+        ],
+        [
+          "lacher_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ],
+        [
+          "volume_hm3",
+          "SIM"
+        ]
+      ],
+      "expected_combo_count": 8,
+      "present_combo_count": 2,
+      "coverage_pct": 25.0
+    },
+    {
+      "station_id": "3b66e39c-331b-4db1-aad2-8f4aa2df1575",
+      "code": "13",
+      "name": "Bge Bouhouda",
+      "station_type": "Barrage",
+      "basin_id": "3645c19b-971f-495f-9b17-1f1693b8340e",
+      "basin_code": "1",
+      "basin_name": "Ouergha",
+      "total_records": 3055,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T10:00:00+00:00",
+      "combos": {
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1478,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        },
+        "volume_hm3::OBS": {
+          "variable_code": "volume_hm3",
+          "variable_label": "Volume",
+          "variable_unit": "hm3",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1577,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "OBS"
+        ],
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "inflow_m3s",
+          "SIM"
+        ],
+        [
+          "lacher_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ],
+        [
+          "volume_hm3",
+          "SIM"
+        ]
+      ],
+      "expected_combo_count": 8,
+      "present_combo_count": 2,
+      "coverage_pct": 25.0
+    },
+    {
+      "station_id": "d8806731-95fe-48c7-b268-d2d79390c202",
+      "code": "14",
+      "name": "Bge Garde de Sebou",
+      "station_type": "Barrage",
+      "basin_id": "784737e1-f7bd-4823-9df6-de41df7bdc3b",
+      "basin_code": "2",
+      "basin_name": "bas sebou",
+      "total_records": 3447,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T11:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 306,
+          "first_record": "2026-02-07T18:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1522,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        },
+        "volume_hm3::OBS": {
+          "variable_code": "volume_hm3",
+          "variable_label": "Volume",
+          "variable_unit": "hm3",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1619,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "inflow_m3s",
+          "SIM"
+        ],
+        [
+          "lacher_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ],
+        [
+          "volume_hm3",
+          "SIM"
+        ]
+      ],
+      "expected_combo_count": 8,
+      "present_combo_count": 3,
+      "coverage_pct": 37.5
+    },
+    {
+      "station_id": "673eca14-7bef-43d9-802a-ad5975024602",
+      "code": "15",
+      "name": "Bge Idriss 1er",
+      "station_type": "Barrage",
+      "basin_id": "1e2160e9-139b-48b9-a7e9-72cf3e96bd62",
+      "basin_code": "5",
+      "basin_name": "lebene",
+      "total_records": 3111,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T10:00:00+00:00",
+      "combos": {
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1506,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        },
+        "volume_hm3::OBS": {
+          "variable_code": "volume_hm3",
+          "variable_label": "Volume",
+          "variable_unit": "hm3",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1605,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "OBS"
+        ],
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "inflow_m3s",
+          "SIM"
+        ],
+        [
+          "lacher_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ],
+        [
+          "volume_hm3",
+          "SIM"
+        ]
+      ],
+      "expected_combo_count": 8,
+      "present_combo_count": 2,
+      "coverage_pct": 25.0
+    },
+    {
+      "station_id": "2af8d8fb-766f-472f-b941-2541d0e77645",
+      "code": "16",
+      "name": "Bge Kansera",
+      "station_type": "Barrage",
+      "basin_id": "4c5512f7-2c9a-4d63-b88a-ad66d081a615",
+      "basin_code": "3",
+      "basin_name": "beht",
+      "total_records": 3140,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T10:00:00+00:00",
+      "combos": {
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1521,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        },
+        "volume_hm3::OBS": {
+          "variable_code": "volume_hm3",
+          "variable_label": "Volume",
+          "variable_unit": "hm3",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1619,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "OBS"
+        ],
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "inflow_m3s",
+          "SIM"
+        ],
+        [
+          "lacher_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ],
+        [
+          "volume_hm3",
+          "SIM"
+        ]
+      ],
+      "expected_combo_count": 8,
+      "present_combo_count": 2,
+      "coverage_pct": 25.0
+    },
+    {
+      "station_id": "ea84d0c6-5711-4e6e-88d5-2ef15b7f601c",
+      "code": "55",
+      "name": "BGE Michlifen",
+      "station_type": "Barrage",
+      "basin_id": "4c5512f7-2c9a-4d63-b88a-ad66d081a615",
+      "basin_code": "3",
+      "basin_name": "beht",
+      "total_records": 1297,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-16T10:00:00+00:00",
+      "combos": {
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1297,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "OBS"
+        ],
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "inflow_m3s",
+          "SIM"
+        ],
+        [
+          "lacher_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ],
+        [
+          "volume_hm3",
+          "OBS"
+        ],
+        [
+          "volume_hm3",
+          "SIM"
+        ]
+      ],
+      "expected_combo_count": 8,
+      "present_combo_count": 1,
+      "coverage_pct": 12.5
+    },
+    {
+      "station_id": "f4e10b72-0c07-4182-9c95-8ee66cd65e5d",
+      "code": "38",
+      "name": "Bge Ouljet Soltane",
+      "station_type": "Barrage",
+      "basin_id": "4c5512f7-2c9a-4d63-b88a-ad66d081a615",
+      "basin_code": "3",
+      "basin_name": "beht",
+      "total_records": 3080,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T11:00:00+00:00",
+      "combos": {
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1490,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        },
+        "volume_hm3::OBS": {
+          "variable_code": "volume_hm3",
+          "variable_label": "Volume",
+          "variable_unit": "hm3",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1590,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "OBS"
+        ],
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "inflow_m3s",
+          "SIM"
+        ],
+        [
+          "lacher_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ],
+        [
+          "volume_hm3",
+          "SIM"
+        ]
+      ],
+      "expected_combo_count": 8,
+      "present_combo_count": 2,
+      "coverage_pct": 25.0
+    },
+    {
+      "station_id": "6afec03b-124d-4d79-972d-91d85558254b",
+      "code": "17",
+      "name": "Bge Sahla",
+      "station_type": "Barrage",
+      "basin_id": "3645c19b-971f-495f-9b17-1f1693b8340e",
+      "basin_code": "1",
+      "basin_name": "Ouergha",
+      "total_records": 3059,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T11:00:00+00:00",
+      "combos": {
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1479,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        },
+        "volume_hm3::OBS": {
+          "variable_code": "volume_hm3",
+          "variable_label": "Volume",
+          "variable_unit": "hm3",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1580,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "OBS"
+        ],
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "inflow_m3s",
+          "SIM"
+        ],
+        [
+          "lacher_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ],
+        [
+          "volume_hm3",
+          "SIM"
+        ]
+      ],
+      "expected_combo_count": 8,
+      "present_combo_count": 2,
+      "coverage_pct": 25.0
+    },
+    {
+      "station_id": "2f6ebe9f-e99a-400c-a020-8c2cded6d8a1",
+      "code": "18",
+      "name": "Bge Sidi Chahed",
+      "station_type": "Barrage",
+      "basin_id": "e32115cf-7d84-4df3-99cb-ccacbd3cc065",
+      "basin_code": "6",
+      "basin_name": "moyen sebou",
+      "total_records": 3143,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T11:00:00+00:00",
+      "combos": {
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1523,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        },
+        "volume_hm3::OBS": {
+          "variable_code": "volume_hm3",
+          "variable_label": "Volume",
+          "variable_unit": "hm3",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1620,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "OBS"
+        ],
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "inflow_m3s",
+          "SIM"
+        ],
+        [
+          "lacher_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ],
+        [
+          "volume_hm3",
+          "SIM"
+        ]
+      ],
+      "expected_combo_count": 8,
+      "present_combo_count": 2,
+      "coverage_pct": 25.0
+    },
+    {
+      "station_id": "b733a005-e048-40db-be0d-1c3c31f3799c",
+      "code": "19",
+      "name": "Bni Haitem",
+      "station_type": "Station hydrologique",
+      "basin_id": "1e2160e9-139b-48b9-a7e9-72cf3e96bd62",
+      "basin_code": "5",
+      "basin_name": "lebene",
+      "total_records": 3143,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T11:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1620,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1523,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 2,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "3907b326-38b6-402d-a29d-0277f8a1b012",
+      "code": "20",
+      "name": "Boufellou",
+      "station_type": "Station hydrologique",
+      "basin_id": "3645c19b-971f-495f-9b17-1f1693b8340e",
+      "basin_code": "1",
+      "basin_name": "Ouergha",
+      "total_records": 2980,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T10:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1577,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T10:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1403,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 2,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "2d5bb3a7-63cf-4d33-a081-89f1ceb9127b",
+      "code": "21",
+      "name": "Boured",
+      "station_type": "Station hydrologique",
+      "basin_id": "3645c19b-971f-495f-9b17-1f1693b8340e",
+      "basin_code": "1",
+      "basin_name": "Ouergha",
+      "total_records": 3142,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T11:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1620,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1522,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 2,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "7ef56ec6-8898-4afe-9dca-806ca1e217b0",
+      "code": "60",
+      "name": "BRG AIT MOULAY AHMED",
+      "station_type": "Barrage",
+      "basin_id": "4c5512f7-2c9a-4d63-b88a-ad66d081a615",
+      "basin_code": "3",
+      "basin_name": "beht",
+      "total_records": 0,
+      "first_record": "n/a",
+      "last_record": "n/a",
+      "combos": {},
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "OBS"
+        ],
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "inflow_m3s",
+          "SIM"
+        ],
+        [
+          "lacher_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ],
+        [
+          "precip_mm",
+          "OBS"
+        ],
+        [
+          "volume_hm3",
+          "OBS"
+        ],
+        [
+          "volume_hm3",
+          "SIM"
+        ]
+      ],
+      "expected_combo_count": 8,
+      "present_combo_count": 0,
+      "coverage_pct": 0.0
+    },
+    {
+      "station_id": "be2624ff-7da2-4c63-88be-ce7b21cb0208",
+      "code": "58",
+      "name": "BRG ETTINE",
+      "station_type": "Barrage",
+      "basin_id": "784737e1-f7bd-4823-9df6-de41df7bdc3b",
+      "basin_code": "2",
+      "basin_name": "bas sebou",
+      "total_records": 3139,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T10:00:00+00:00",
+      "combos": {
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1520,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        },
+        "volume_hm3::OBS": {
+          "variable_code": "volume_hm3",
+          "variable_label": "Volume",
+          "variable_unit": "hm3",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1619,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "OBS"
+        ],
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "inflow_m3s",
+          "SIM"
+        ],
+        [
+          "lacher_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ],
+        [
+          "volume_hm3",
+          "SIM"
+        ]
+      ],
+      "expected_combo_count": 8,
+      "present_combo_count": 2,
+      "coverage_pct": 25.0
+    },
+    {
+      "station_id": "82c117ea-4186-452c-89f4-a74034238bf3",
+      "code": "61",
+      "name": "BRG MAKRACH",
+      "station_type": "Barrage",
+      "basin_id": "1e2160e9-139b-48b9-a7e9-72cf3e96bd62",
+      "basin_code": "5",
+      "basin_name": "lebene",
+      "total_records": 3133,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T08:00:00+00:00",
+      "combos": {
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1517,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T09:00:00+00:00"
+        },
+        "volume_hm3::OBS": {
+          "variable_code": "volume_hm3",
+          "variable_label": "Volume",
+          "variable_unit": "hm3",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1616,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T08:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "OBS"
+        ],
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "inflow_m3s",
+          "SIM"
+        ],
+        [
+          "lacher_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ],
+        [
+          "volume_hm3",
+          "SIM"
+        ]
+      ],
+      "expected_combo_count": 8,
+      "present_combo_count": 2,
+      "coverage_pct": 25.0
+    },
+    {
+      "station_id": "e194bacc-23ab-481d-bad1-2c7e5ea9072c",
+      "code": "59",
+      "name": "BRG SEHB ELMARGA",
+      "station_type": "Barrage",
+      "basin_id": "45d0b242-2fe0-48ee-9570-bb012e936c28",
+      "basin_code": "4",
+      "basin_name": "Haut Sebou",
+      "total_records": 1162,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-04T23:00:00+00:00",
+      "combos": {
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1162,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-04T23:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "OBS"
+        ],
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "inflow_m3s",
+          "SIM"
+        ],
+        [
+          "lacher_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ],
+        [
+          "volume_hm3",
+          "OBS"
+        ],
+        [
+          "volume_hm3",
+          "SIM"
+        ]
+      ],
+      "expected_combo_count": 8,
+      "present_combo_count": 1,
+      "coverage_pct": 12.5
+    },
+    {
+      "station_id": "85931069-f178-437a-8601-f2c80521a98a",
+      "code": "57",
+      "name": "Confluence ouergha sebou",
+      "station_type": "point resultats",
+      "basin_id": "3645c19b-971f-495f-9b17-1f1693b8340e",
+      "basin_code": "1",
+      "basin_name": "Ouergha",
+      "total_records": 0,
+      "first_record": "n/a",
+      "last_record": "n/a",
+      "combos": {},
+      "missing_combos": [],
+      "expected_combo_count": 0,
+      "present_combo_count": 0,
+      "coverage_pct": 100.0
+    },
+    {
+      "station_id": "95e951db-475b-485a-bd1c-2c8a13196bcb",
+      "code": "56",
+      "name": "Confluence Sebou aval",
+      "station_type": "point resultats",
+      "basin_id": "784737e1-f7bd-4823-9df6-de41df7bdc3b",
+      "basin_code": "2",
+      "basin_name": "bas sebou",
+      "total_records": 0,
+      "first_record": "n/a",
+      "last_record": "n/a",
+      "combos": {},
+      "missing_combos": [],
+      "expected_combo_count": 0,
+      "present_combo_count": 0,
+      "coverage_pct": 100.0
+    },
+    {
+      "station_id": "7bc1d9da-da25-4407-892f-ed8cfe7eeb25",
+      "code": "49",
+      "name": "Dar El Arsa",
+      "station_type": "Station hydrologique",
+      "basin_id": "45d0b242-2fe0-48ee-9570-bb012e936c28",
+      "basin_code": "4",
+      "basin_name": "Haut Sebou",
+      "total_records": 3116,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T11:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1607,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1509,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 2,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "bf80fe7c-6a10-4c39-b027-28aa2ce5d0a3",
+      "code": "22",
+      "name": "Dar El Hamra",
+      "station_type": "Station hydrologique",
+      "basin_id": "45d0b242-2fe0-48ee-9570-bb012e936c28",
+      "basin_code": "4",
+      "basin_name": "Haut Sebou",
+      "total_records": 3024,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T11:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1546,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1478,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 2,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "cd5473c5-ffe4-493f-8d05-a76ff3aba0fa",
+      "code": "23",
+      "name": "Dar Salem",
+      "station_type": "Station hydrologique",
+      "basin_id": "784737e1-f7bd-4823-9df6-de41df7bdc3b",
+      "basin_code": "2",
+      "basin_name": "bas sebou",
+      "total_records": 3140,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T11:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1620,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1520,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 2,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "73a59639-83f1-4858-a156-ed7437988770",
+      "code": "24",
+      "name": "El Hammam",
+      "station_type": "Station hydrologique",
+      "basin_id": "4c5512f7-2c9a-4d63-b88a-ad66d081a615",
+      "basin_code": "3",
+      "basin_name": "beht",
+      "total_records": 3140,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T11:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1620,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1520,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 2,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "dc8702ed-b4f6-4c12-9963-5887891f739d",
+      "code": "25",
+      "name": "El Malha",
+      "station_type": "Station hydrologique",
+      "basin_id": "3645c19b-971f-495f-9b17-1f1693b8340e",
+      "basin_code": "1",
+      "basin_name": "Ouergha",
+      "total_records": 3077,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T11:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1590,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1487,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 2,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "67dd82e5-5d99-4ba8-a668-241ca7db0f99",
+      "code": "26",
+      "name": "El Mers",
+      "station_type": "Station hydrologique",
+      "basin_id": "45d0b242-2fe0-48ee-9570-bb012e936c28",
+      "basin_code": "4",
+      "basin_name": "Haut Sebou",
+      "total_records": 3142,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T11:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1620,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1522,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 2,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "827cb524-d155-45cd-94fe-19c43068b5ec",
+      "code": "27",
+      "name": "Fes(ABHS)",
+      "station_type": "Poste Pluviométrique",
+      "basin_id": "45d0b242-2fe0-48ee-9570-bb012e936c28",
+      "basin_code": "4",
+      "basin_name": "Haut Sebou",
+      "total_records": 1522,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-16T10:00:00+00:00",
+      "combos": {
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1522,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 2,
+      "present_combo_count": 1,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "92eee75d-8edc-4809-8fb4-d7952dbbb396",
+      "code": "28",
+      "name": "Galaz",
+      "station_type": "Station hydrologique",
+      "basin_id": "3645c19b-971f-495f-9b17-1f1693b8340e",
+      "basin_code": "1",
+      "basin_name": "Ouergha",
+      "total_records": 2455,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-17T16:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1355,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-17T16:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1100,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-13T12:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 2,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "2863f5e1-c7db-4d93-b92b-b2d5abcb566f",
+      "code": "29",
+      "name": "Had Kourt",
+      "station_type": "Station hydrologique",
+      "basin_id": "784737e1-f7bd-4823-9df6-de41df7bdc3b",
+      "basin_code": "2",
+      "basin_name": "bas sebou",
+      "total_records": 3143,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T11:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1620,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1523,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 2,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "c9868413-5bbd-4d83-9bdd-79bb738f746f",
+      "code": "30",
+      "name": "Hajria",
+      "station_type": "Station hydrologique",
+      "basin_id": "3645c19b-971f-495f-9b17-1f1693b8340e",
+      "basin_code": "1",
+      "basin_name": "Ouergha",
+      "total_records": 3143,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T11:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1620,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1523,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 2,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "bb71e0a9-7f57-476b-9338-00d5ddc86767",
+      "code": "31",
+      "name": "Jbel Outka",
+      "station_type": "Poste Pluviométrique",
+      "basin_id": "3645c19b-971f-495f-9b17-1f1693b8340e",
+      "basin_code": "1",
+      "basin_name": "Ouergha",
+      "total_records": 1481,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-16T10:00:00+00:00",
+      "combos": {
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1481,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 2,
+      "present_combo_count": 1,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "f099ea17-8a81-4bee-ac99-da8e33d6ee96",
+      "code": "32",
+      "name": "Jorf El Malha",
+      "station_type": "Station hydrologique",
+      "basin_id": "3645c19b-971f-495f-9b17-1f1693b8340e",
+      "basin_code": "1",
+      "basin_name": "Ouergha",
+      "total_records": 3142,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T11:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1620,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1522,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 2,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "1577cd6e-a3c9-417b-8e80-23963f1b67fa",
+      "code": "41",
+      "name": "Kharrouba",
+      "station_type": "Station hydrologique",
+      "basin_id": "784737e1-f7bd-4823-9df6-de41df7bdc3b",
+      "basin_code": "2",
+      "basin_name": "bas sebou",
+      "total_records": 3099,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T09:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1612,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T09:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1487,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T09:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 2,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "dbc64b6b-c431-4906-908f-b9f2deb749b0",
+      "code": "33",
+      "name": "Khenichet",
+      "station_type": "Station hydrologique",
+      "basin_id": "3645c19b-971f-495f-9b17-1f1693b8340e",
+      "basin_code": "1",
+      "basin_name": "Ouergha",
+      "total_records": 0,
+      "first_record": "n/a",
+      "last_record": "n/a",
+      "combos": {},
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "OBS"
+        ],
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ],
+        [
+          "precip_mm",
+          "OBS"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 0,
+      "coverage_pct": 0.0
+    },
+    {
+      "station_id": "f7ee85e4-9784-4973-83a0-1a0fd9511ae4",
+      "code": "34",
+      "name": "Lalla Mimouna",
+      "station_type": "Station hydrologique",
+      "basin_id": "159828bc-41d7-4591-975d-08939f4b7428",
+      "basin_code": "7",
+      "basin_name": "bassins cotiers",
+      "total_records": 3142,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T11:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1620,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1522,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 2,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "f6dcb133-431d-426f-a77c-c63accf80da9",
+      "code": "35",
+      "name": "My Ali Cherif",
+      "station_type": "Station hydrologique",
+      "basin_id": "159828bc-41d7-4591-975d-08939f4b7428",
+      "basin_code": "7",
+      "basin_name": "bassins cotiers",
+      "total_records": 3143,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T11:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1620,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1523,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 2,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "0bd877a9-2291-4b12-b71a-bea858ccbb18",
+      "code": "36",
+      "name": "Oued ifrane",
+      "station_type": "Station hydrologique",
+      "basin_id": "4c5512f7-2c9a-4d63-b88a-ad66d081a615",
+      "basin_code": "3",
+      "basin_name": "beht",
+      "total_records": 3141,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T11:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1620,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1521,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 2,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "794ced18-7d9d-4777-9d98-cd9c36aa874e",
+      "code": "62",
+      "name": "POMPAGE EST 2",
+      "station_type": "Poste Pluviométrique",
+      "basin_id": "e32115cf-7d84-4df3-99cb-ccacbd3cc065",
+      "basin_code": "6",
+      "basin_name": "moyen sebou",
+      "total_records": 1523,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-16T10:00:00+00:00",
+      "combos": {
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1523,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 2,
+      "present_combo_count": 1,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "fed14462-423c-426e-b9c1-5db56c8a18b6",
+      "code": "39",
+      "name": "Pont Ait Aissa",
+      "station_type": "Station hydrologique",
+      "basin_id": "45d0b242-2fe0-48ee-9570-bb012e936c28",
+      "basin_code": "4",
+      "basin_name": "Haut Sebou",
+      "total_records": 3133,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T11:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1619,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1514,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 2,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "84171a00-33ab-4be6-becc-6400e2389267",
+      "code": "42",
+      "name": "Ratba",
+      "station_type": "Station hydrologique",
+      "basin_id": "3645c19b-971f-495f-9b17-1f1693b8340e",
+      "basin_code": "1",
+      "basin_name": "Ouergha",
+      "total_records": 2033,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T09:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1068,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T09:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 965,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-03T18:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 2,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "b6a95f76-cd6d-4139-88a3-175051dd5f04",
+      "code": "43",
+      "name": "Route 26",
+      "station_type": "Station hydrologique",
+      "basin_id": "e32115cf-7d84-4df3-99cb-ccacbd3cc065",
+      "basin_code": "6",
+      "basin_name": "moyen sebou",
+      "total_records": 1519,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-16T10:00:00+00:00",
+      "combos": {
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1519,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "OBS"
+        ],
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 1,
+      "coverage_pct": 25.0
+    },
+    {
+      "station_id": "fc19c630-a302-412a-892b-0c626e88489d",
+      "code": "44",
+      "name": "Souk El Had",
+      "station_type": "Station hydrologique",
+      "basin_id": "4c5512f7-2c9a-4d63-b88a-ad66d081a615",
+      "basin_code": "3",
+      "basin_name": "beht",
+      "total_records": 3141,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T11:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1620,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1521,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 2,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "f2a2852e-82c2-44e7-9135-60ed6bf40b10",
+      "code": "45",
+      "name": "Tabouda",
+      "station_type": "Station hydrologique",
+      "basin_id": "3645c19b-971f-495f-9b17-1f1693b8340e",
+      "basin_code": "1",
+      "basin_name": "Ouergha",
+      "total_records": 2772,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T10:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1444,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T10:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1328,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 2,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "00512de3-cb27-495d-9c51-210838e05196",
+      "code": "53",
+      "name": "Taghrout",
+      "station_type": "Station hydrologique",
+      "basin_id": "45d0b242-2fe0-48ee-9570-bb012e936c28",
+      "basin_code": "4",
+      "basin_name": "Haut Sebou",
+      "total_records": 3130,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T11:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1620,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1510,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 2,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "4e154cbc-ffe1-480e-a890-2083338dbdf9",
+      "code": "46",
+      "name": "Taghzout",
+      "station_type": "Station hydrologique",
+      "basin_id": "3645c19b-971f-495f-9b17-1f1693b8340e",
+      "basin_code": "1",
+      "basin_name": "Ouergha",
+      "total_records": 3104,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T11:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1602,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1502,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 2,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "b76ecd6f-fbd1-4e04-8745-b1f2ef14f0af",
+      "code": "47",
+      "name": "Tissa",
+      "station_type": "Station hydrologique",
+      "basin_id": "1e2160e9-139b-48b9-a7e9-72cf3e96bd62",
+      "basin_code": "5",
+      "basin_name": "lebene",
+      "total_records": 3138,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T11:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1619,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1519,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 2,
+      "coverage_pct": 50.0
+    },
+    {
+      "station_id": "a98eba67-6039-483a-9d08-dedce2bb9b7a",
+      "code": "48",
+      "name": "Zrarda",
+      "station_type": "Station hydrologique",
+      "basin_id": "1e2160e9-139b-48b9-a7e9-72cf3e96bd62",
+      "basin_code": "5",
+      "basin_name": "lebene",
+      "total_records": 3109,
+      "first_record": "2025-12-15T00:00:00+00:00",
+      "last_record": "2026-02-20T11:00:00+00:00",
+      "combos": {
+        "flow_m3s::OBS": {
+          "variable_code": "flow_m3s",
+          "variable_label": "Débit",
+          "variable_unit": "m3/s",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1619,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-20T11:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 1490,
+          "first_record": "2025-12-15T00:00:00+00:00",
+          "last_record": "2026-02-16T10:00:00+00:00"
+        }
+      },
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 2,
+      "coverage_pct": 50.0
+    }
+  ],
+  "basins": [
+    {
+      "basin_id": "784737e1-f7bd-4823-9df6-de41df7bdc3b",
+      "code": "2",
+      "name": "bas sebou",
+      "level": 0,
+      "parent_basin_id": null,
+      "total_records": 822,
+      "first_record": "2026-02-26T01:00:00+00:00",
+      "last_record": "2026-03-13T00:00:00+00:00",
+      "combos": {
+        "precip_mm::AROME": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "AROME",
+          "source_label": "PrÃ©visions AROME",
+          "source_type": "forecast",
+          "provider": "MÃ©tÃ©o / AROME",
+          "record_count": 360,
+          "first_record": "2026-02-26T01:00:00+00:00",
+          "last_record": "2026-03-13T00:00:00+00:00"
+        },
+        "precip_mm::ECMWF": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "ECMWF",
+          "source_label": "PrÃ©visions ECMWF",
+          "source_type": "forecast",
+          "provider": "ECMWF",
+          "record_count": 360,
+          "first_record": "2026-02-26T01:00:00+00:00",
+          "last_record": "2026-03-13T00:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 102,
+          "first_record": "2026-02-26T01:00:00+00:00",
+          "last_record": "2026-03-02T06:00:00+00:00"
+        }
+      },
+      "missing_combos": [],
+      "expected_combo_count": 3,
+      "present_combo_count": 3,
+      "coverage_pct": 100.0
+    },
+    {
+      "basin_id": "159828bc-41d7-4591-975d-08939f4b7428",
+      "code": "7",
+      "name": "bassins cotiers",
+      "level": 0,
+      "parent_basin_id": null,
+      "total_records": 822,
+      "first_record": "2026-02-26T01:00:00+00:00",
+      "last_record": "2026-03-13T00:00:00+00:00",
+      "combos": {
+        "precip_mm::AROME": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "AROME",
+          "source_label": "PrÃ©visions AROME",
+          "source_type": "forecast",
+          "provider": "MÃ©tÃ©o / AROME",
+          "record_count": 360,
+          "first_record": "2026-02-26T01:00:00+00:00",
+          "last_record": "2026-03-13T00:00:00+00:00"
+        },
+        "precip_mm::ECMWF": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "ECMWF",
+          "source_label": "PrÃ©visions ECMWF",
+          "source_type": "forecast",
+          "provider": "ECMWF",
+          "record_count": 360,
+          "first_record": "2026-02-26T01:00:00+00:00",
+          "last_record": "2026-03-13T00:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 102,
+          "first_record": "2026-02-26T01:00:00+00:00",
+          "last_record": "2026-03-02T06:00:00+00:00"
+        }
+      },
+      "missing_combos": [],
+      "expected_combo_count": 3,
+      "present_combo_count": 3,
+      "coverage_pct": 100.0
+    },
+    {
+      "basin_id": "4c5512f7-2c9a-4d63-b88a-ad66d081a615",
+      "code": "3",
+      "name": "beht",
+      "level": 0,
+      "parent_basin_id": null,
+      "total_records": 822,
+      "first_record": "2026-02-26T01:00:00+00:00",
+      "last_record": "2026-03-13T00:00:00+00:00",
+      "combos": {
+        "precip_mm::AROME": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "AROME",
+          "source_label": "PrÃ©visions AROME",
+          "source_type": "forecast",
+          "provider": "MÃ©tÃ©o / AROME",
+          "record_count": 360,
+          "first_record": "2026-02-26T01:00:00+00:00",
+          "last_record": "2026-03-13T00:00:00+00:00"
+        },
+        "precip_mm::ECMWF": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "ECMWF",
+          "source_label": "PrÃ©visions ECMWF",
+          "source_type": "forecast",
+          "provider": "ECMWF",
+          "record_count": 360,
+          "first_record": "2026-02-26T01:00:00+00:00",
+          "last_record": "2026-03-13T00:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 102,
+          "first_record": "2026-02-26T01:00:00+00:00",
+          "last_record": "2026-03-02T06:00:00+00:00"
+        }
+      },
+      "missing_combos": [],
+      "expected_combo_count": 3,
+      "present_combo_count": 3,
+      "coverage_pct": 100.0
+    },
+    {
+      "basin_id": "45d0b242-2fe0-48ee-9570-bb012e936c28",
+      "code": "4",
+      "name": "Haut Sebou",
+      "level": 0,
+      "parent_basin_id": null,
+      "total_records": 822,
+      "first_record": "2026-02-26T01:00:00+00:00",
+      "last_record": "2026-03-13T00:00:00+00:00",
+      "combos": {
+        "precip_mm::AROME": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "AROME",
+          "source_label": "PrÃ©visions AROME",
+          "source_type": "forecast",
+          "provider": "MÃ©tÃ©o / AROME",
+          "record_count": 360,
+          "first_record": "2026-02-26T01:00:00+00:00",
+          "last_record": "2026-03-13T00:00:00+00:00"
+        },
+        "precip_mm::ECMWF": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "ECMWF",
+          "source_label": "PrÃ©visions ECMWF",
+          "source_type": "forecast",
+          "provider": "ECMWF",
+          "record_count": 360,
+          "first_record": "2026-02-26T01:00:00+00:00",
+          "last_record": "2026-03-13T00:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 102,
+          "first_record": "2026-02-26T01:00:00+00:00",
+          "last_record": "2026-03-02T06:00:00+00:00"
+        }
+      },
+      "missing_combos": [],
+      "expected_combo_count": 3,
+      "present_combo_count": 3,
+      "coverage_pct": 100.0
+    },
+    {
+      "basin_id": "1e2160e9-139b-48b9-a7e9-72cf3e96bd62",
+      "code": "5",
+      "name": "lebene",
+      "level": 0,
+      "parent_basin_id": null,
+      "total_records": 822,
+      "first_record": "2026-02-26T01:00:00+00:00",
+      "last_record": "2026-03-13T00:00:00+00:00",
+      "combos": {
+        "precip_mm::AROME": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "AROME",
+          "source_label": "PrÃ©visions AROME",
+          "source_type": "forecast",
+          "provider": "MÃ©tÃ©o / AROME",
+          "record_count": 360,
+          "first_record": "2026-02-26T01:00:00+00:00",
+          "last_record": "2026-03-13T00:00:00+00:00"
+        },
+        "precip_mm::ECMWF": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "ECMWF",
+          "source_label": "PrÃ©visions ECMWF",
+          "source_type": "forecast",
+          "provider": "ECMWF",
+          "record_count": 360,
+          "first_record": "2026-02-26T01:00:00+00:00",
+          "last_record": "2026-03-13T00:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 102,
+          "first_record": "2026-02-26T01:00:00+00:00",
+          "last_record": "2026-03-02T06:00:00+00:00"
+        }
+      },
+      "missing_combos": [],
+      "expected_combo_count": 3,
+      "present_combo_count": 3,
+      "coverage_pct": 100.0
+    },
+    {
+      "basin_id": "e32115cf-7d84-4df3-99cb-ccacbd3cc065",
+      "code": "6",
+      "name": "moyen sebou",
+      "level": 0,
+      "parent_basin_id": null,
+      "total_records": 822,
+      "first_record": "2026-02-26T01:00:00+00:00",
+      "last_record": "2026-03-13T00:00:00+00:00",
+      "combos": {
+        "precip_mm::AROME": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "AROME",
+          "source_label": "PrÃ©visions AROME",
+          "source_type": "forecast",
+          "provider": "MÃ©tÃ©o / AROME",
+          "record_count": 360,
+          "first_record": "2026-02-26T01:00:00+00:00",
+          "last_record": "2026-03-13T00:00:00+00:00"
+        },
+        "precip_mm::ECMWF": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "ECMWF",
+          "source_label": "PrÃ©visions ECMWF",
+          "source_type": "forecast",
+          "provider": "ECMWF",
+          "record_count": 360,
+          "first_record": "2026-02-26T01:00:00+00:00",
+          "last_record": "2026-03-13T00:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 102,
+          "first_record": "2026-02-26T01:00:00+00:00",
+          "last_record": "2026-03-02T06:00:00+00:00"
+        }
+      },
+      "missing_combos": [],
+      "expected_combo_count": 3,
+      "present_combo_count": 3,
+      "coverage_pct": 100.0
+    },
+    {
+      "basin_id": "3645c19b-971f-495f-9b17-1f1693b8340e",
+      "code": "1",
+      "name": "Ouergha",
+      "level": 0,
+      "parent_basin_id": null,
+      "total_records": 822,
+      "first_record": "2026-02-26T01:00:00+00:00",
+      "last_record": "2026-03-13T00:00:00+00:00",
+      "combos": {
+        "precip_mm::AROME": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "AROME",
+          "source_label": "PrÃ©visions AROME",
+          "source_type": "forecast",
+          "provider": "MÃ©tÃ©o / AROME",
+          "record_count": 360,
+          "first_record": "2026-02-26T01:00:00+00:00",
+          "last_record": "2026-03-13T00:00:00+00:00"
+        },
+        "precip_mm::ECMWF": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "ECMWF",
+          "source_label": "PrÃ©visions ECMWF",
+          "source_type": "forecast",
+          "provider": "ECMWF",
+          "record_count": 360,
+          "first_record": "2026-02-26T01:00:00+00:00",
+          "last_record": "2026-03-13T00:00:00+00:00"
+        },
+        "precip_mm::OBS": {
+          "variable_code": "precip_mm",
+          "variable_label": "Pluie",
+          "variable_unit": "mm",
+          "source_code": "OBS",
+          "source_label": "Observations",
+          "source_type": "observed",
+          "provider": "ABHS",
+          "record_count": 102,
+          "first_record": "2026-02-26T01:00:00+00:00",
+          "last_record": "2026-03-02T06:00:00+00:00"
+        }
+      },
+      "missing_combos": [],
+      "expected_combo_count": 3,
+      "present_combo_count": 3,
+      "coverage_pct": 100.0
+    }
+  ],
+  "empty_stations": [
+    {
+      "station_id": "7ef56ec6-8898-4afe-9dca-806ca1e217b0",
+      "code": "60",
+      "name": "BRG AIT MOULAY AHMED",
+      "station_type": "Barrage",
+      "basin_id": "4c5512f7-2c9a-4d63-b88a-ad66d081a615",
+      "basin_code": "3",
+      "basin_name": "beht",
+      "total_records": 0,
+      "first_record": "n/a",
+      "last_record": "n/a",
+      "combos": {},
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "OBS"
+        ],
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "inflow_m3s",
+          "SIM"
+        ],
+        [
+          "lacher_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ],
+        [
+          "precip_mm",
+          "OBS"
+        ],
+        [
+          "volume_hm3",
+          "OBS"
+        ],
+        [
+          "volume_hm3",
+          "SIM"
+        ]
+      ],
+      "expected_combo_count": 8,
+      "present_combo_count": 0,
+      "coverage_pct": 0.0
+    },
+    {
+      "station_id": "85931069-f178-437a-8601-f2c80521a98a",
+      "code": "57",
+      "name": "Confluence ouergha sebou",
+      "station_type": "point resultats",
+      "basin_id": "3645c19b-971f-495f-9b17-1f1693b8340e",
+      "basin_code": "1",
+      "basin_name": "Ouergha",
+      "total_records": 0,
+      "first_record": "n/a",
+      "last_record": "n/a",
+      "combos": {},
+      "missing_combos": [],
+      "expected_combo_count": 0,
+      "present_combo_count": 0,
+      "coverage_pct": 100.0
+    },
+    {
+      "station_id": "95e951db-475b-485a-bd1c-2c8a13196bcb",
+      "code": "56",
+      "name": "Confluence Sebou aval",
+      "station_type": "point resultats",
+      "basin_id": "784737e1-f7bd-4823-9df6-de41df7bdc3b",
+      "basin_code": "2",
+      "basin_name": "bas sebou",
+      "total_records": 0,
+      "first_record": "n/a",
+      "last_record": "n/a",
+      "combos": {},
+      "missing_combos": [],
+      "expected_combo_count": 0,
+      "present_combo_count": 0,
+      "coverage_pct": 100.0
+    },
+    {
+      "station_id": "dbc64b6b-c431-4906-908f-b9f2deb749b0",
+      "code": "33",
+      "name": "Khenichet",
+      "station_type": "Station hydrologique",
+      "basin_id": "3645c19b-971f-495f-9b17-1f1693b8340e",
+      "basin_code": "1",
+      "basin_name": "Ouergha",
+      "total_records": 0,
+      "first_record": "n/a",
+      "last_record": "n/a",
+      "combos": {},
+      "missing_combos": [
+        [
+          "flow_m3s",
+          "OBS"
+        ],
+        [
+          "flow_m3s",
+          "SIM"
+        ],
+        [
+          "precip_mm",
+          "ECMWF"
+        ],
+        [
+          "precip_mm",
+          "OBS"
+        ]
+      ],
+      "expected_combo_count": 4,
+      "present_combo_count": 0,
+      "coverage_pct": 0.0
+    }
+  ],
+  "missing_counts_by_type": {
+    "Station hydrologique": [
+      {
+        "variable_code": "flow_m3s",
+        "source_code": "SIM",
+        "missing_station_count": 36
+      },
+      {
+        "variable_code": "precip_mm",
+        "source_code": "ECMWF",
+        "missing_station_count": 31
+      },
+      {
+        "variable_code": "flow_m3s",
+        "source_code": "OBS",
+        "missing_station_count": 2
+      },
+      {
+        "variable_code": "precip_mm",
+        "source_code": "OBS",
+        "missing_station_count": 1
+      }
+    ],
+    "Poste Pluviométrique": [
+      {
+        "variable_code": "precip_mm",
+        "source_code": "ECMWF",
+        "missing_station_count": 4
+      }
+    ],
+    "Barrage": [
+      {
+        "variable_code": "flow_m3s",
+        "source_code": "OBS",
+        "missing_station_count": 15
+      },
+      {
+        "variable_code": "precip_mm",
+        "source_code": "ECMWF",
+        "missing_station_count": 15
+      },
+      {
+        "variable_code": "flow_m3s",
+        "source_code": "SIM",
+        "missing_station_count": 15
+      },
+      {
+        "variable_code": "inflow_m3s",
+        "source_code": "SIM",
+        "missing_station_count": 15
+      },
+      {
+        "variable_code": "lacher_m3s",
+        "source_code": "SIM",
+        "missing_station_count": 15
+      },
+      {
+        "variable_code": "volume_hm3",
+        "source_code": "SIM",
+        "missing_station_count": 15
+      },
+      {
+        "variable_code": "volume_hm3",
+        "source_code": "OBS",
+        "missing_station_count": 4
+      },
+      {
+        "variable_code": "precip_mm",
+        "source_code": "OBS",
+        "missing_station_count": 1
+      }
+    ]
+  }
+}

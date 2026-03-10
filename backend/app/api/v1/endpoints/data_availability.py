@@ -1,14 +1,200 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import text
+from sqlalchemy.engine.url import make_url
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.exc import SQLAlchemyError
+from uuid import UUID
 
 from app.db.session import get_db
 
 router = APIRouter()
+
+DEFAULT_QUERY_TIMEOUT_SECONDS = 8.0
+
+
+class ConnectionTestRequest(BaseModel):
+    database_url: str
+
+
+def _normalize_postgres_async_url(raw_url: str) -> str:
+    value = (raw_url or "").strip().strip("'\"")
+    if value.startswith("psql "):
+        value = value[5:].strip()
+    if value.startswith("postgresql+asyncpg://"):
+        return value
+    if value.startswith("postgresql://"):
+        return value.replace("postgresql://", "postgresql+asyncpg://", 1)
+    if value.startswith("postgres://"):
+        return value.replace("postgres://", "postgresql+asyncpg://", 1)
+    return value
+
+
+@router.post("/test-connection")
+async def test_connection(payload: ConnectionTestRequest) -> Dict[str, Any]:
+    """
+    Test a PostgreSQL connection URL without changing runtime settings.
+    Returns a compact diagnostic payload for the Settings page.
+    """
+    db_url = _normalize_postgres_async_url(payload.database_url)
+    if not db_url:
+        return {"success": False, "message": "URL de connexion vide."}
+
+    try:
+        parsed = make_url(db_url)
+        if not (parsed.drivername or "").startswith("postgresql"):
+            return {
+                "success": False,
+                "message": "URL invalide: seul PostgreSQL est supporté ici.",
+            }
+    except Exception:
+        return {"success": False, "message": "Format d'URL invalide."}
+
+    engine = create_async_engine(
+        db_url,
+        echo=False,
+        pool_pre_ping=True,
+        connect_args={"timeout": 5, "command_timeout": 10},
+    )
+
+    try:
+        async with engine.connect() as conn:
+            version_res = await asyncio.wait_for(
+                conn.execute(text("SELECT version()")),
+                timeout=8,
+            )
+            db_version = version_res.scalar() or "unknown"
+
+            schemas_res = await asyncio.wait_for(
+                conn.execute(
+                    text(
+                        """
+                        SELECT schema_name
+                        FROM information_schema.schemata
+                        ORDER BY schema_name
+                        LIMIT 30
+                        """
+                    )
+                ),
+                timeout=8,
+            )
+            schemas = [row[0] for row in schemas_res.fetchall()]
+
+            views_res = await asyncio.wait_for(
+                conn.execute(
+                    text(
+                        """
+                        SELECT schemaname || '.' || viewname AS full_view
+                        FROM pg_views
+                        WHERE schemaname IN ('api', 'geo', 'ref', 'ts')
+                        ORDER BY schemaname, viewname
+                        LIMIT 10
+                        """
+                    )
+                ),
+                timeout=8,
+            )
+            sample_views = [row[0] for row in views_res.fetchall()]
+
+        return {
+            "success": True,
+            "message": "Connexion PostgreSQL réussie.",
+            "details": {
+                "database_version": db_version,
+                "schemas_found": schemas,
+                "sample_views": sample_views,
+            },
+        }
+    except asyncio.TimeoutError:
+        return {
+            "success": False,
+            "message": "Timeout: le serveur PostgreSQL ne répond pas à temps.",
+        }
+    except Exception as exc:
+        return {
+            "success": False,
+            "message": f"{type(exc).__name__}: {str(exc)}",
+        }
+    finally:
+        await engine.dispose()
+
+
+def _is_timescale_missing_chunk_error(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return "_timescaledb_internal" in msg and "not found" in msg
+
+
+async def _safe_query_mappings(
+    db: AsyncSession,
+    query: str,
+    params: Optional[Dict[str, Any]] = None,
+    *,
+    timeout_seconds: float = DEFAULT_QUERY_TIMEOUT_SECONDS,
+    warnings: Optional[list[str]] = None,
+    label: str = "query",
+) -> list[Dict[str, Any]]:
+    try:
+        result = await asyncio.wait_for(
+            db.execute(text(query), params or {}),
+            timeout=timeout_seconds,
+        )
+        return result.mappings().all()
+    except asyncio.TimeoutError:
+        if warnings is not None:
+            warnings.append(f"{label}: timeout")
+        await db.rollback()
+        return []
+    except SQLAlchemyError as exc:
+        if _is_timescale_missing_chunk_error(exc):
+            if warnings is not None:
+                warnings.append(f"{label}: timescale_missing_chunk")
+            await db.rollback()
+            return []
+        if warnings is not None:
+            warnings.append(f"{label}: {type(exc).__name__}")
+            await db.rollback()
+            return []
+        raise
+
+
+async def _safe_query_scalar(
+    db: AsyncSession,
+    query: str,
+    params: Optional[Dict[str, Any]] = None,
+    *,
+    timeout_seconds: float = DEFAULT_QUERY_TIMEOUT_SECONDS,
+    default: int = 0,
+    warnings: Optional[list[str]] = None,
+    label: str = "scalar_query",
+) -> int:
+    try:
+        result = await asyncio.wait_for(
+            db.execute(text(query), params or {}),
+            timeout=timeout_seconds,
+        )
+        return int(result.scalar() or default)
+    except asyncio.TimeoutError:
+        if warnings is not None:
+            warnings.append(f"{label}: timeout")
+        await db.rollback()
+        return default
+    except SQLAlchemyError as exc:
+        if _is_timescale_missing_chunk_error(exc):
+            if warnings is not None:
+                warnings.append(f"{label}: timescale_missing_chunk")
+            await db.rollback()
+            return default
+        if warnings is not None:
+            warnings.append(f"{label}: {type(exc).__name__}")
+            await db.rollback()
+            return default
+        raise
 
 
 def _iso(dt) -> Optional[str]:
@@ -32,70 +218,117 @@ def _latest(current: Optional[str], candidate: Optional[str]) -> Optional[str]:
 
 
 @router.get("/data-availability")
-async def scan_data_availability(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
+async def scan_data_availability(
+    include_time_stats: bool = False,
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
     """
     Scan entities and variables to determine data availability.
-    Uses api.v_timeseries with entity_type/entity_id layout.
+    Uses api.v_timeseries_station (stations) and ts.basin_measurement (basins).
     """
 
-    total_stations = (await db.execute(text("SELECT COUNT(*) FROM geo.station"))).scalar() or 0
-    total_basins = (await db.execute(text("SELECT COUNT(*) FROM geo.basin"))).scalar() or 0
+    scan_warnings: list[str] = []
 
-    station_rows = (
-        await db.execute(
-            text(
-                """
+    total_stations = await _safe_query_scalar(
+        db,
+        "SELECT COUNT(*) FROM geo.station",
+        warnings=scan_warnings,
+        label="total_stations",
+    )
+    total_basins = await _safe_query_scalar(
+        db,
+        "SELECT COUNT(*) FROM geo.basin",
+        warnings=scan_warnings,
+        label="total_basins",
+    )
+    stations_with_data_count = await _safe_query_scalar(
+        db,
+        "SELECT COUNT(DISTINCT station_id) FROM api.v_timeseries_station",
+        warnings=scan_warnings,
+        label="stations_with_data",
+    )
+    basins_with_data_count = await _safe_query_scalar(
+        db,
+        "SELECT COUNT(DISTINCT basin_id) FROM ts.basin_measurement",
+        warnings=scan_warnings,
+        label="basins_with_data",
+    )
+
+    station_rows = await _safe_query_mappings(
+        db,
+        """
                 SELECT
-                    COALESCE(NULLIF(TRIM(s.station_type), ''), NULLIF(TRIM(t.entity_subtype), ''), 'unknown') AS station_type,
+                    COALESCE(NULLIF(TRIM(s.station_type), ''), 'unknown') AS station_type,
                     t.variable_code,
                     t.source_code,
                     COUNT(*)::bigint AS record_count,
                     MIN(t.time) AS first_record,
                     MAX(t.time) AS last_record
-                FROM api.v_timeseries t
-                LEFT JOIN geo.station s ON s.station_id = t.entity_id
-                WHERE t.entity_type IN ('station', 'stations')
+                FROM api.v_timeseries_station t
+                LEFT JOIN geo.station s ON s.station_id = t.station_id
                 GROUP BY 1,2,3
                 ORDER BY 1,2,3
-                """
-            )
-        )
-    ).mappings().all()
+                """,
+        warnings=scan_warnings,
+        label="station_rows",
+    )
 
-    basin_rows = (
-        await db.execute(
-            text(
-                """
+    basin_rows = await _safe_query_mappings(
+        db,
+        """
                 SELECT
                     'level_0'::text AS basin_group,
-                    t.variable_code,
-                    t.source_code,
+                    v.code AS variable_code,
+                    s.code AS source_code,
                     COUNT(*)::bigint AS record_count,
-                    MIN(t.time) AS first_record,
-                    MAX(t.time) AS last_record
-                FROM api.v_timeseries t
-                WHERE t.entity_type IN ('basin', 'basins')
+                    MIN(m.time) AS first_record,
+                    MAX(m.time) AS last_record
+                FROM ts.basin_measurement m
+                JOIN ref.variable v ON v.variable_id = m.variable_id
+                JOIN ref.source s ON s.source_id = m.source_id
                 GROUP BY 1,2,3
                 ORDER BY 1,2,3
-                """
-            )
-        )
-    ).mappings().all()
+                """,
+        warnings=scan_warnings,
+        label="basin_rows",
+    )
 
-    variable_time_stats_rows = (
-        await db.execute(
-            text(
-                """
-                WITH variable_bounds AS (
+    variable_time_stats_rows: list[Dict[str, Any]] = []
+    if include_time_stats:
+        variable_time_stats_rows = await _safe_query_mappings(
+            db,
+            """
+                WITH all_timeseries AS (
+                    SELECT
+                        'stations'::text AS entity_type,
+                        t.station_id::text AS entity_id,
+                        t.variable_code,
+                        t.source_code,
+                        t.time
+                    FROM api.v_timeseries_station t
+                    WHERE t.station_id IS NOT NULL
+
+                    UNION ALL
+
+                    SELECT
+                        'basins'::text AS entity_type,
+                        m.basin_id::text AS entity_id,
+                        v.code AS variable_code,
+                        s.code AS source_code,
+                        m.time
+                    FROM ts.basin_measurement m
+                    JOIN ref.variable v ON v.variable_id = m.variable_id
+                    JOIN ref.source s ON s.source_id = m.source_id
+                    WHERE m.basin_id IS NOT NULL
+                ),
+                variable_bounds AS (
                     SELECT
                         t.variable_code,
                         COUNT(*)::bigint AS record_count,
-                        (COUNT(DISTINCT t.entity_id) FILTER (
-                            WHERE t.entity_type IN ('station', 'stations', 'basin', 'basins')
-                        ))::bigint AS entity_count,
+                        COUNT(DISTINCT t.entity_type || ':' || t.entity_id)::bigint AS entity_count,
                         MIN(t.time) AS first_record,
                         MAX(t.time) AS last_record
-                    FROM api.v_timeseries t
+                    FROM all_timeseries t
                     GROUP BY t.variable_code
                 ),
                 steps AS (
@@ -110,7 +343,7 @@ async def scan_data_availability(db: AsyncSession = Depends(get_db)) -> Dict[str
                                 )
                             )
                         )::bigint AS step_seconds
-                    FROM api.v_timeseries t
+                    FROM all_timeseries t
                     WHERE t.entity_id IS NOT NULL
                 ),
                 step_stats AS (
@@ -140,15 +373,15 @@ async def scan_data_availability(db: AsyncSession = Depends(get_db)) -> Dict[str
                 FROM variable_bounds vb
                 LEFT JOIN step_stats ss ON ss.variable_code = vb.variable_code
                 ORDER BY vb.variable_code
-                """
-            )
+                """,
+            timeout_seconds=12.0,
+            warnings=scan_warnings,
+            label="variable_time_stats",
         )
-    ).mappings().all()
 
-    station_entities_base = (
-        await db.execute(
-            text(
-                """
+    station_entities_base = await _safe_query_mappings(
+        db,
+        """
                 SELECT
                     s.station_id::text AS station_id,
                     NULLIF(TRIM(s.code::text), '') AS station_code,
@@ -160,9 +393,10 @@ async def scan_data_availability(db: AsyncSession = Depends(get_db)) -> Dict[str
                 LEFT JOIN geo.basin b ON b.basin_id = s.basin_id
                 ORDER BY s.name NULLS LAST, s.code NULLS LAST
                 """
-            )
-        )
-    ).mappings().all()
+        ,
+        warnings=scan_warnings,
+        label="station_entities_base",
+    )
 
     station_entities: Dict[str, Any] = {}
     for row in station_entities_base:
@@ -181,26 +415,24 @@ async def scan_data_availability(db: AsyncSession = Depends(get_db)) -> Dict[str
             "variables": {},
         }
 
-    station_entity_rows = (
-        await db.execute(
-            text(
-                """
+    station_entity_rows = await _safe_query_mappings(
+        db,
+        """
                 SELECT
-                    t.entity_id::text AS station_id,
+                    t.station_id::text AS station_id,
                     t.variable_code,
                     t.source_code,
                     COUNT(*)::bigint AS record_count,
                     MIN(t.time) AS first_record,
                     MAX(t.time) AS last_record
-                FROM api.v_timeseries t
-                WHERE t.entity_type IN ('station', 'stations')
-                  AND t.entity_id IS NOT NULL
+                FROM api.v_timeseries_station t
+                WHERE t.station_id IS NOT NULL
                 GROUP BY 1,2,3
                 ORDER BY 1,2,3
-                """
-            )
-        )
-    ).mappings().all()
+                """,
+        warnings=scan_warnings,
+        label="station_entity_rows",
+    )
 
     for row in station_entity_rows:
         station_id = row["station_id"]
@@ -246,10 +478,9 @@ async def scan_data_availability(db: AsyncSession = Depends(get_db)) -> Dict[str
             source_codes.update(variable_data["sources"].keys())
         entity["source_count"] = len(source_codes)
 
-    basin_entities_base = (
-        await db.execute(
-            text(
-                """
+    basin_entities_base = await _safe_query_mappings(
+        db,
+        """
                 SELECT
                     b.basin_id::text AS basin_id,
                     NULLIF(TRIM(b.code::text), '') AS basin_code,
@@ -258,9 +489,10 @@ async def scan_data_availability(db: AsyncSession = Depends(get_db)) -> Dict[str
                 FROM geo.basin b
                 ORDER BY b.level NULLS LAST, b.name NULLS LAST
                 """
-            )
-        )
-    ).mappings().all()
+        ,
+        warnings=scan_warnings,
+        label="basin_entities_base",
+    )
 
     basin_entities: Dict[str, Any] = {}
     for row in basin_entities_base:
@@ -277,26 +509,26 @@ async def scan_data_availability(db: AsyncSession = Depends(get_db)) -> Dict[str
             "variables": {},
         }
 
-    basin_entity_rows = (
-        await db.execute(
-            text(
-                """
+    basin_entity_rows = await _safe_query_mappings(
+        db,
+        """
                 SELECT
-                    t.entity_id::text AS basin_id,
-                    t.variable_code,
-                    t.source_code,
+                    m.basin_id::text AS basin_id,
+                    v.code AS variable_code,
+                    s.code AS source_code,
                     COUNT(*)::bigint AS record_count,
-                    MIN(t.time) AS first_record,
-                    MAX(t.time) AS last_record
-                FROM api.v_timeseries t
-                WHERE t.entity_type IN ('basin', 'basins')
-                  AND t.entity_id IS NOT NULL
+                    MIN(m.time) AS first_record,
+                    MAX(m.time) AS last_record
+                FROM ts.basin_measurement m
+                JOIN ref.variable v ON v.variable_id = m.variable_id
+                JOIN ref.source s ON s.source_id = m.source_id
+                WHERE m.basin_id IS NOT NULL
                 GROUP BY 1,2,3
                 ORDER BY 1,2,3
-                """
-            )
-        )
-    ).mappings().all()
+                """,
+        warnings=scan_warnings,
+        label="basin_entity_rows",
+    )
 
     for row in basin_entity_rows:
         basin_id = row["basin_id"]
@@ -341,18 +573,18 @@ async def scan_data_availability(db: AsyncSession = Depends(get_db)) -> Dict[str
         entity["source_count"] = len(source_codes)
 
     stations: Dict[str, Any] = {}
-    counts = (
-        await db.execute(
-            text(
-                """
+    counts = await _safe_query_mappings(
+        db,
+        """
                 SELECT COALESCE(station_type, 'unknown') AS station_type, COUNT(*)::int AS c
                 FROM geo.station
                 GROUP BY 1
                 ORDER BY 1
                 """
-            )
-        )
-    ).mappings().all()
+        ,
+        warnings=scan_warnings,
+        label="station_type_counts",
+    )
 
     for row in counts:
         stations[row["station_type"]] = {"count": int(row["c"]), "variables": {}}
@@ -400,8 +632,8 @@ async def scan_data_availability(db: AsyncSession = Depends(get_db)) -> Dict[str
         "total_variables": len(variables),
         "total_sources": len(sources),
         "total_records": int(total_records),
-        "stations_with_data": sum(1 for e in station_entities.values() if e["total_records"] > 0),
-        "basins_with_data": sum(1 for e in basin_entities.values() if e["total_records"] > 0),
+        "stations_with_data": int(stations_with_data_count),
+        "basins_with_data": int(basins_with_data_count),
         "available_variables": sorted(list(variables)),
         "available_sources": sorted(list(sources)),
         "variable_time_stats": [
@@ -419,6 +651,8 @@ async def scan_data_availability(db: AsyncSession = Depends(get_db)) -> Dict[str
             }
             for row in variable_time_stats_rows
         ],
+        "partial_scan": len(scan_warnings) > 0,
+        "scan_warnings": scan_warnings,
     }
 
     sorted_station_entities = sorted(
@@ -450,10 +684,10 @@ async def get_stations_with_data(
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """
-    Get stations having data in api.v_timeseries for variable/source filters.
+    Get stations having data in api.v_timeseries_station for variable/source filters.
     """
 
-    conditions = ["t.entity_type IN ('station', 'stations')"]
+    conditions = ["1=1"]
     params: Dict[str, Any] = {}
 
     if variable_code:
@@ -474,13 +708,18 @@ async def get_stations_with_data(
             s.name,
             s.station_type
         FROM geo.station s
-        JOIN api.v_timeseries t ON t.entity_id = s.station_id
+        JOIN api.v_timeseries_station t ON t.station_id = s.station_id
         WHERE {where_clause}
         ORDER BY s.name
         """
     )
 
-    rows = (await db.execute(query, params)).fetchall()
+    try:
+        rows = (await db.execute(query, params)).fetchall()
+    except SQLAlchemyError as exc:
+        if _is_timescale_missing_chunk_error(exc):
+            return []
+        raise
 
     return [
         {
@@ -491,3 +730,85 @@ async def get_stations_with_data(
         }
         for row in rows
     ]
+
+
+@router.delete("/data-availability/stations/{station_id}/variables/{variable_code}/sources/{source_code}")
+async def delete_station_source_series(
+    station_id: str,
+    variable_code: str,
+    source_code: str,
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Delete all station measurements for one variable/source pair.
+    Used by the data availability scanner detail table.
+    """
+    try:
+        safe_station_id = str(UUID(station_id))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="station_id invalide (UUID attendu).") from exc
+
+    normalized_variable = (variable_code or "").strip()
+    normalized_source = (source_code or "").strip().upper()
+
+    if not normalized_variable:
+        raise HTTPException(status_code=400, detail="variable_code est obligatoire.")
+    if not normalized_source:
+        raise HTTPException(status_code=400, detail="source_code est obligatoire.")
+
+    try:
+        variable_res = await db.execute(
+            text("SELECT variable_id FROM ref.variable WHERE code = :code"),
+            {"code": normalized_variable},
+        )
+        variable_row = variable_res.first()
+        if not variable_row:
+            raise HTTPException(status_code=404, detail=f"Variable '{normalized_variable}' introuvable.")
+
+        source_res = await db.execute(
+            text("SELECT source_id FROM ref.source WHERE UPPER(code) = :code"),
+            {"code": normalized_source},
+        )
+        source_row = source_res.first()
+        if not source_row:
+            raise HTTPException(status_code=404, detail=f"Source '{normalized_source}' introuvable.")
+
+        delete_result = await db.execute(
+            text(
+                """
+                DELETE FROM ts.measurement
+                WHERE station_id = CAST(:station_id AS UUID)
+                  AND variable_id = :variable_id
+                  AND source_id = :source_id
+                """
+            ),
+            {
+                "station_id": safe_station_id,
+                "variable_id": variable_row[0],
+                "source_id": source_row[0],
+            },
+        )
+        deleted_count = int(delete_result.rowcount or 0)
+
+        if deleted_count == 0:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    "Aucune donnée trouvée pour cette combinaison station/variable/source."
+                ),
+            )
+
+        await db.commit()
+        return {
+            "status": "success",
+            "station_id": safe_station_id,
+            "variable_code": normalized_variable,
+            "source_code": normalized_source,
+            "deleted_count": deleted_count,
+        }
+    except HTTPException:
+        await db.rollback()
+        raise
+    except SQLAlchemyError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erreur SQL: {type(exc).__name__}") from exc

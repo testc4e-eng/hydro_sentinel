@@ -2,7 +2,10 @@ import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { RecapBarrageChart, type RecapSeriesConfig } from "@/components/analysis/charts/RecapBarrageChart";
+import { CompactFilterBar, defaultCompactFilters, type CompactFilters } from "@/components/CompactFilterBar";
 import { useDams, useSources } from "@/hooks/useApi";
 import { CriticalityBadge } from "@/components/CriticalityBadge";
 import { api } from "@/lib/api";
@@ -33,7 +36,7 @@ interface SlotFetchResult {
 }
 
 interface CoverageInfo {
-  mode: "common" | "union" | "none";
+  mode: "common" | "union" | "requested" | "none";
   from?: string;
   to?: string;
 }
@@ -73,6 +76,14 @@ const DEFAULT_SERIES: SeriesSlot[] = [
     type: "line",
     color: "#ea580c",
   },
+  {
+    id: "s4",
+    variableCode: "flow_m3s",
+    sourceCode: OBS_CODE,
+    axis: "right",
+    type: "line",
+    color: "#22c55e",
+  },
 ];
 
 function uniq(values: string[]) {
@@ -87,6 +98,28 @@ function dayKey(timeValue: any): string {
   return String(timeValue).slice(0, 10);
 }
 
+function isoToDay(isoValue?: string): string | undefined {
+  if (!isoValue) return undefined;
+  const parsed = new Date(isoValue);
+  if (Number.isNaN(parsed.getTime())) return undefined;
+  return parsed.toISOString().slice(0, 10);
+}
+
+function enumerateDays(startDay?: string, endDay?: string): string[] {
+  if (!startDay || !endDay || startDay > endDay) return [];
+
+  const out: string[] = [];
+  const cursor = new Date(`${startDay}T00:00:00.000Z`);
+  const end = new Date(`${endDay}T00:00:00.000Z`);
+
+  while (cursor <= end) {
+    out.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
+  return out;
+}
+
 export default function RecapBarrage() {
   const [seriesSlots, setSeriesSlots] = useState<SeriesSlot[]>(DEFAULT_SERIES);
   const [chartData, setChartData] = useState<any[]>([]);
@@ -94,10 +127,16 @@ export default function RecapBarrage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [coverageInfo, setCoverageInfo] = useState<CoverageInfo>({ mode: "none" });
   const [seriesDiag, setSeriesDiag] = useState<Record<string, { points: number; usedSource: string }>>({});
+  const [continuityEnabled, setContinuityEnabled] = useState(false);
+  const [continuityOrder, setContinuityOrder] = useState<string[]>([OBS_CODE]);
 
   const { data: damsResult } = useDams();
   const { data: sourcesResult } = useSources();
   const [selectedDamId, setSelectedDamId] = useState<string>("");
+  const [filters, setFilters] = useState<CompactFilters>({
+    ...defaultCompactFilters,
+    period: "14d",
+  });
 
   const rawSources = sourcesResult?.data?.data ?? [];
   const availableSourceCodes = useMemo(() => new Set(rawSources.map((s: any) => String(s.code))), [rawSources]);
@@ -124,6 +163,8 @@ export default function RecapBarrage() {
     map["HEC_HMS"] = "Simule";
     return map;
   }, [sourceOptions]);
+  const continuityAvailable = sourceOptions.length > 1;
+  const continuityActive = continuityAvailable && continuityEnabled;
 
   const availableStations = (damsResult?.data ?? []).filter((s: any) => String(s.type).toLowerCase() === "barrage");
 
@@ -147,9 +188,61 @@ export default function RecapBarrage() {
     });
   }, [sourceOptions]);
 
+  useEffect(() => {
+    const availableCodes = sourceOptions.map((source) => source.code);
+    if (availableCodes.length < 2) {
+      setContinuityEnabled(false);
+    }
+
+    setContinuityOrder((previousOrder) => {
+      const kept = previousOrder.filter((code) => availableCodes.includes(code));
+      const missing = availableCodes.filter((code) => !kept.includes(code));
+      return [...kept, ...missing];
+    });
+  }, [sourceOptions]);
+
   const dam = availableStations.find((d: any) => d.id === selectedDamId);
 
   const activeSlots = useMemo(() => seriesSlots.filter((slot) => slot.variableCode !== "none"), [seriesSlots]);
+  const dateRange = useMemo(() => {
+    const end = new Date();
+    const start = new Date();
+
+    switch (filters.period) {
+      case "24h":
+        start.setHours(end.getHours() - 24);
+        break;
+      case "72h":
+        start.setHours(end.getHours() - 72);
+        break;
+      case "7d":
+        start.setDate(end.getDate() - 7);
+        break;
+      case "14d":
+        start.setDate(end.getDate() - 14);
+        break;
+      case "30d":
+        start.setDate(end.getDate() - 30);
+        break;
+      case "custom": {
+        const parsedStart = filters.customStart ? new Date(filters.customStart) : null;
+        const parsedEnd = filters.customEnd ? new Date(filters.customEnd) : null;
+        if (parsedStart && !Number.isNaN(parsedStart.getTime())) {
+          start.setTime(parsedStart.getTime());
+        } else {
+          start.setDate(end.getDate() - 7);
+        }
+        if (parsedEnd && !Number.isNaN(parsedEnd.getTime())) {
+          end.setTime(parsedEnd.getTime());
+        }
+        break;
+      }
+      default:
+        start.setDate(end.getDate() - 7);
+    }
+
+    return { start: start.toISOString(), end: end.toISOString() };
+  }, [filters.customEnd, filters.customStart, filters.period]);
 
   const chartSeries = useMemo<RecapSeriesConfig[]>(
     () =>
@@ -163,11 +256,13 @@ export default function RecapBarrage() {
             type: slot.type,
             color: slot.color,
             unit: def.unit,
-            label: `${def.label} (${sourceLabelByCode[slot.sourceCode] ?? slot.sourceCode})`,
+            label: continuityActive
+              ? `${def.label} (Continuite)`
+              : `${def.label} (${sourceLabelByCode[slot.sourceCode] ?? slot.sourceCode})`,
           };
         })
         .filter(Boolean) as RecapSeriesConfig[],
-    [activeSlots, sourceLabelByCode],
+    [activeSlots, continuityActive, sourceLabelByCode],
   );
 
   const slotSignature = useMemo(
@@ -184,8 +279,8 @@ export default function RecapBarrage() {
     [activeSlots],
   );
 
-  const buildSourceCandidates = (slot: SeriesSlot) => {
-    const selected = slot.sourceCode;
+  const buildSourceCandidates = (slot: SeriesSlot, sourceOverride?: string) => {
+    const selected = sourceOverride ?? slot.sourceCode;
     const allAvailable = availableSourceCodes.size > 0;
 
     const keepAvailable = (codes: string[]) => {
@@ -213,17 +308,50 @@ export default function RecapBarrage() {
   };
 
   const fetchSlotRows = async (slot: SeriesSlot): Promise<SlotFetchResult> => {
-    const candidates = buildSourceCandidates(slot);
-
-    for (const sourceCode of candidates) {
+    const requestRows = async (sourceCode: string) => {
       const response = await api.get("/measurements/timeseries", {
         params: {
           station_id: selectedDamId,
           variable_code: slot.variableCode,
           source_code: sourceCode,
+          start: dateRange.start,
+          end: dateRange.end,
         },
       });
-      const rows = Array.isArray(response.data) ? response.data : [];
+      return Array.isArray(response.data) ? response.data : [];
+    };
+
+    if (continuityActive && continuityOrder.length > 1) {
+      const basePriority = continuityOrder.filter((sourceCode) =>
+        sourceOptions.some((source) => source.code === sourceCode),
+      );
+      const prioritizedCandidates = uniq(
+        basePriority.flatMap((sourceCode) => buildSourceCandidates(slot, sourceCode)),
+      );
+      const mergedByTime = new Map<string, any>();
+
+      for (const sourceCode of prioritizedCandidates) {
+        const rows = await requestRows(sourceCode);
+        rows.forEach((row: any) => {
+          const time = row?.time;
+          if (!time || mergedByTime.has(time)) return;
+          mergedByTime.set(time, row);
+        });
+      }
+
+      const mergedRows = Array.from(mergedByTime.values()).sort((a, b) =>
+        String(a.time).localeCompare(String(b.time)),
+      );
+      const continuityLabel = `Continuite (${basePriority
+        .map((code) => sourceLabelByCode[code] ?? code)
+        .join(" > ")})`;
+
+      return { slot, rows: mergedRows, usedSource: continuityLabel };
+    }
+
+    const candidates = buildSourceCandidates(slot);
+    for (const sourceCode of candidates) {
+      const rows = await requestRows(sourceCode);
       if (rows.length > 0) {
         return { slot, rows, usedSource: sourceCode };
       }
@@ -254,38 +382,37 @@ export default function RecapBarrage() {
           diag[r.slot.id] = { points: r.rows.length, usedSource: r.usedSource };
         });
 
+        const requestedStart = isoToDay(dateRange.start);
+        const requestedEnd = isoToDay(dateRange.end);
+        const rangeDays = enumerateDays(requestedStart, requestedEnd);
         const nonEmpty = responses.filter((r) => r.rows.length > 0);
+
         if (nonEmpty.length === 0) {
           if (!cancelled) {
+            const emptyRows = rangeDays.map((day) => {
+              const out: any = { date: day };
+              activeSlots.forEach((slot) => {
+                out[slot.id] = null;
+              });
+              return out;
+            });
             setSeriesDiag(diag);
-            setCoverageInfo({ mode: "none" });
-            setChartData([]);
+            setCoverageInfo(
+              requestedStart && requestedEnd
+                ? { mode: "requested", from: requestedStart, to: requestedEnd }
+                : { mode: "none" },
+            );
+            setChartData(emptyRows);
           }
           return;
         }
 
-        const ranges = nonEmpty.map((r) => {
-          const days = r.rows.map((pt: any) => dayKey(pt.time)).filter(Boolean).sort();
-          return { min: days[0], max: days[days.length - 1] };
-        });
-
-        const unionStart = ranges.reduce((acc, r) => (acc < r.min ? acc : r.min), ranges[0].min);
-        const unionEnd = ranges.reduce((acc, r) => (acc > r.max ? acc : r.max), ranges[0].max);
-
-        const hasAllSeries = nonEmpty.length === activeSlots.length;
-        let coverageStart = unionStart;
-        let coverageEnd = unionEnd;
-        let coverageMode: CoverageInfo["mode"] = "union";
-
-        if (hasAllSeries) {
-          const commonStart = ranges.reduce((acc, r) => (acc > r.min ? acc : r.min), ranges[0].min);
-          const commonEnd = ranges.reduce((acc, r) => (acc < r.max ? acc : r.max), ranges[0].max);
-          if (commonStart <= commonEnd) {
-            coverageStart = commonStart;
-            coverageEnd = commonEnd;
-            coverageMode = "common";
-          }
-        }
+        const fallbackRangeDays = nonEmpty
+          .flatMap((r) => r.rows.map((pt: any) => dayKey(pt.time)).filter(Boolean))
+          .sort();
+        const coverageStart = requestedStart ?? fallbackRangeDays[0] ?? "";
+        const coverageEnd = requestedEnd ?? fallbackRangeDays[fallbackRangeDays.length - 1] ?? "";
+        const coverageMode: CoverageInfo["mode"] = requestedStart && requestedEnd ? "requested" : "union";
 
         const dayMap = new Map<string, any>();
 
@@ -338,10 +465,24 @@ export default function RecapBarrage() {
             return out;
           });
 
+        const coverageDays = rangeDays.length > 0 ? rangeDays : enumerateDays(coverageStart, coverageEnd);
+        const mergedByDay = new Map(merged.map((row) => [row.date, row]));
+        const padded = coverageDays.length > 0
+          ? coverageDays.map((day) => {
+              const existing = mergedByDay.get(day);
+              if (existing) return existing;
+              const out: any = { date: day };
+              activeSlots.forEach((slot) => {
+                out[slot.id] = null;
+              });
+              return out;
+            })
+          : merged;
+
         if (!cancelled) {
           setSeriesDiag(diag);
           setCoverageInfo({ mode: coverageMode, from: coverageStart, to: coverageEnd });
-          setChartData(merged);
+          setChartData(padded);
         }
       } catch (error) {
         if (!cancelled) {
@@ -363,10 +504,20 @@ export default function RecapBarrage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedDamId, slotSignature]);
+  }, [continuityActive, continuityOrder, dateRange.end, dateRange.start, selectedDamId, slotSignature, sourceOptions]);
 
   const updateSlot = (slotId: string, patch: Partial<SeriesSlot>) => {
     setSeriesSlots((prev) => prev.map((slot) => (slot.id === slotId ? { ...slot, ...patch } : slot)));
+  };
+  const handleContinuityOrderChange = (index: number, sourceCode: string) => {
+    setContinuityOrder((previousOrder) => {
+      const fromIndex = previousOrder.indexOf(sourceCode);
+      if (fromIndex === -1 || fromIndex === index) return previousOrder;
+
+      const next = [...previousOrder];
+      [next[index], next[fromIndex]] = [next[fromIndex], next[index]];
+      return next;
+    });
   };
 
   return (
@@ -376,7 +527,7 @@ export default function RecapBarrage() {
         <Badge variant="outline" className="text-xs border-blue-500 text-blue-600">Auto couverture</Badge>
       </div>
 
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground whitespace-nowrap">Barrage :</span>
           <Select value={selectedDamId} onValueChange={setSelectedDamId}>
@@ -391,12 +542,50 @@ export default function RecapBarrage() {
           </Select>
           {dam && <CriticalityBadge status="safe" />}
         </div>
+
+        <CompactFilterBar filters={filters} onChange={setFilters} hideSources />
       </div>
+
+      {continuityAvailable && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/20 p-2">
+          <Label className="flex items-center gap-2 text-xs cursor-pointer">
+            <Checkbox
+              checked={continuityEnabled}
+              onCheckedChange={(checked) => setContinuityEnabled(Boolean(checked))}
+            />
+            Mode continuité
+          </Label>
+
+          {continuityActive && continuityOrder.length > 1 && (
+            <>
+              <span className="text-xs text-muted-foreground ml-2">Priorité :</span>
+              {continuityOrder.map((sourceCode, index) => (
+                <Select
+                  key={`recap-continuity-${index}`}
+                  value={sourceCode}
+                  onValueChange={(nextSourceCode) => handleContinuityOrderChange(index, nextSourceCode)}
+                >
+                  <SelectTrigger className="h-7 w-[150px] text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {continuityOrder.map((candidateSourceCode) => (
+                      <SelectItem key={`recap-continuity-candidate-${index}-${candidateSourceCode}`} value={candidateSourceCode}>
+                        P{index + 1} - {sourceLabelByCode[candidateSourceCode] ?? candidateSourceCode}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ))}
+            </>
+          )}
+        </div>
+      )}
 
       <Card className="border-dashed">
         <CardContent className="p-3 space-y-3">
-          <div className="text-sm font-medium">Configuration du graphique (3 series maximum)</div>
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+          <div className="text-sm font-medium">Configuration du graphique (4 series maximum)</div>
+          <div className="grid grid-cols-1 xl:grid-cols-4 gap-3">
             {seriesSlots.map((slot, idx) => (
               <div key={slot.id} className="border rounded-md p-2 space-y-2 bg-muted/20">
                 <div className="text-xs font-semibold flex items-center gap-2">
@@ -479,7 +668,13 @@ export default function RecapBarrage() {
           {activeSlots.length > 0 && (
             <div className="text-xs text-muted-foreground border rounded-md p-2 bg-background space-y-0.5">
               <div>
-                Plage utilisee: {coverageInfo.mode === "common" ? "commune" : coverageInfo.mode === "union" ? "union" : "n/a"}
+                Plage utilisee: {coverageInfo.mode === "common"
+                  ? "commune"
+                  : coverageInfo.mode === "union"
+                    ? "union"
+                    : coverageInfo.mode === "requested"
+                      ? "periode demandee"
+                      : "n/a"}
                 {coverageInfo.from && coverageInfo.to ? ` (${coverageInfo.from} -> ${coverageInfo.to})` : ""}
               </div>
               {activeSlots.map((slot) => {

@@ -1,28 +1,44 @@
-from typing import List, Union
+from typing import List, Optional, Union
 from pydantic import AnyHttpUrl, EmailStr, validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from pathlib import Path
+
+BACKEND_ROOT = Path(__file__).resolve().parents[2]
+BACKEND_ENV_FILE = BACKEND_ROOT / ".env"
+
 
 class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "Hydro Sentinel"
     
     # CORS
-    BACKEND_CORS_ORIGINS: List[str] = []
+    BACKEND_CORS_ORIGINS: List[str] = [
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+    BACKEND_CORS_ORIGIN_REGEX: Optional[str] = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
 
     @validator("BACKEND_CORS_ORIGINS", pre=True)
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
+        def normalize(origin: str) -> str:
+            return origin.strip().rstrip("/")
+
         if isinstance(v, str):
             if v.startswith("["):
                 # Parse JSON array
                 import json
-                return json.loads(v)
+                values = json.loads(v)
+                return [normalize(item) for item in values if isinstance(item, str) and normalize(item)]
             # Fallback: split by comma
-            return [i.strip() for i in v.split(",") if i.strip()]
+            return [normalize(i) for i in v.split(",") if normalize(i)]
         elif isinstance(v, list):
-            return v
-        # Default for development
-        return ["http://localhost:8080", "http://localhost:5173", "http://localhost:3000"]
+            return [normalize(i) for i in v if isinstance(i, str) and normalize(i)]
+        return []
 
     # Database
     # Default to SQLite for local dev if Postgres generic URL is present or if env var is missing
@@ -73,6 +89,9 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30 * 24 * 60  # 30 days
 
-    model_config = SettingsConfigDict(case_sensitive=True, env_file=".env")
+    model_config = SettingsConfigDict(
+        case_sensitive=True,
+        env_file=str(BACKEND_ENV_FILE),
+    )
 
 settings = Settings()

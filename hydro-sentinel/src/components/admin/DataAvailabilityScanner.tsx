@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Input } from "@/components/ui/input";
-import { Loader2, Download, RefreshCw } from "lucide-react";
+import { Loader2, Download, RefreshCw, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface SourceAvailability {
@@ -148,7 +148,26 @@ function getStatusLabel(totalRecords: number): string {
   return totalRecords > 0 ? "Avec donnees" : "Sans donnees";
 }
 
-function TimeseriesDetailsTable({ variables }: { variables: Record<string, VariableAvailability> }) {
+interface DeleteSourcePayload {
+  stationId: string;
+  stationName: string;
+  variableCode: string;
+  sourceCode: string;
+}
+
+function TimeseriesDetailsTable({
+  variables,
+  stationId,
+  stationName,
+  onDeleteSource,
+  deletingKey,
+}: {
+  variables: Record<string, VariableAvailability>;
+  stationId?: string;
+  stationName?: string;
+  onDeleteSource?: (payload: DeleteSourcePayload) => Promise<void>;
+  deletingKey?: string | null;
+}) {
   const rows = useMemo(() => {
     return Object.entries(variables)
       .sort(([left], [right]) => left.localeCompare(right))
@@ -176,6 +195,7 @@ function TimeseriesDetailsTable({ variables }: { variables: Record<string, Varia
           <TableHead>Source</TableHead>
           <TableHead>Enregistrements</TableHead>
           <TableHead>Periode</TableHead>
+          {onDeleteSource && stationId ? <TableHead className="text-right">Action</TableHead> : null}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -185,6 +205,32 @@ function TimeseriesDetailsTable({ variables }: { variables: Record<string, Varia
             <TableCell>{row.sourceCode}</TableCell>
             <TableCell>{formatCount(row.recordCount)}</TableCell>
             <TableCell>{formatPeriod(row.firstRecord, row.lastRecord)}</TableCell>
+            {onDeleteSource && stationId ? (
+              <TableCell className="text-right">
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  className="h-8"
+                  disabled={deletingKey === `${stationId}:${row.variableCode}:${row.sourceCode}`}
+                  onClick={() =>
+                    onDeleteSource({
+                      stationId,
+                      stationName: stationName || stationId,
+                      variableCode: row.variableCode,
+                      sourceCode: row.sourceCode,
+                    })
+                  }
+                >
+                  {deletingKey === `${stationId}:${row.variableCode}:${row.sourceCode}` ? (
+                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                  ) : (
+                    <Trash2 className="mr-1 h-3 w-3" />
+                  )}
+                  Supprimer
+                </Button>
+              </TableCell>
+            ) : null}
           </TableRow>
         ))}
       </TableBody>
@@ -193,7 +239,9 @@ function TimeseriesDetailsTable({ variables }: { variables: Record<string, Varia
 }
 
 export function DataAvailabilityScanner() {
+  const SCAN_TIMEOUT_MS = 15000;
   const [loading, setLoading] = useState(false);
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
   const [report, setReport] = useState<DataAvailabilityReport | null>(null);
   const [stationFilter, setStationFilter] = useState("");
   const [basinFilter, setBasinFilter] = useState("");
@@ -201,13 +249,14 @@ export function DataAvailabilityScanner() {
   const [stationDataFilter, setStationDataFilter] = useState<StationDataFilter>("all");
   const { toast } = useToast();
 
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8003";
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "";
   const apiPrefix = import.meta.env.VITE_API_PREFIX || "/api/v1";
 
+  const apiRoot = useMemo(() => joinUrl(apiBaseUrl, apiPrefix), [apiBaseUrl, apiPrefix]);
+
   const endpoint = useMemo(() => {
-    const apiRoot = joinUrl(apiBaseUrl, apiPrefix);
-    return `${apiRoot}/admin/data-availability`;
-  }, [apiBaseUrl, apiPrefix]);
+    return `${apiRoot}/admin/data-availability?include_time_stats=false`;
+  }, [apiRoot]);
 
   const stationEntities = useMemo(() => report?.station_entities ?? [], [report]);
   const basinEntities = useMemo(() => report?.basin_entities ?? [], [report]);
@@ -280,10 +329,13 @@ export function DataAvailabilityScanner() {
 
   const scanData = async () => {
     setLoading(true);
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), SCAN_TIMEOUT_MS);
     try {
       const res = await fetch(endpoint, {
         method: "GET",
         headers: { Accept: "application/json" },
+        signal: controller.signal,
       });
 
       if (!res.ok) {
@@ -299,13 +351,64 @@ export function DataAvailabilityScanner() {
         description: `${formatCount(data.summary?.total_records)} enregistrements analyses`,
       });
     } catch (e: any) {
+      const errorMessage =
+        e?.name === "AbortError"
+          ? `Timeout: le scan a depasse ${SCAN_TIMEOUT_MS / 1000}s.`
+          : (e?.message || "Impossible de scanner les donnees");
       toast({
         title: "Erreur",
-        description: e?.message || "Impossible de scanner les donnees",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
+      window.clearTimeout(timeoutId);
       setLoading(false);
+    }
+  };
+
+  const deleteStationSource = async ({
+    stationId,
+    stationName,
+    variableCode,
+    sourceCode,
+  }: DeleteSourcePayload) => {
+    const confirmed = window.confirm(
+      `Supprimer toutes les donnees pour ${stationName} - ${variableCode}/${sourceCode} ?`,
+    );
+    if (!confirmed) return;
+
+    const key = `${stationId}:${variableCode}:${sourceCode}`;
+    setDeletingKey(key);
+
+    try {
+      const deleteEndpoint = `${apiRoot}/admin/data-availability/stations/${encodeURIComponent(stationId)}/variables/${encodeURIComponent(variableCode)}/sources/${encodeURIComponent(sourceCode)}`;
+      const res = await fetch(deleteEndpoint, {
+        method: "DELETE",
+        headers: { Accept: "application/json" },
+      });
+
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(`HTTP ${res.status} - ${txt || res.statusText}`);
+      }
+
+      const payload = (await res.json().catch(() => null)) as { deleted_count?: number } | null;
+      const deletedCount = payload?.deleted_count ?? 0;
+
+      toast({
+        title: "Suppression reussie",
+        description: `${formatCount(deletedCount)} enregistrements supprimes pour ${variableCode}/${sourceCode}.`,
+      });
+
+      await scanData();
+    } catch (e: any) {
+      toast({
+        title: "Erreur de suppression",
+        description: e?.message || "Impossible de supprimer cette source.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingKey(null);
     }
   };
 
@@ -674,7 +777,13 @@ export function DataAvailabilityScanner() {
                                   <p className="text-xs text-muted-foreground">
                                     Periode: {formatPeriod(station.first_record, station.last_record)}
                                   </p>
-                                  <TimeseriesDetailsTable variables={station.variables} />
+                                  <TimeseriesDetailsTable
+                                    variables={station.variables}
+                                    stationId={station.station_id}
+                                    stationName={station.station_name}
+                                    onDeleteSource={deleteStationSource}
+                                    deletingKey={deletingKey}
+                                  />
                                 </AccordionContent>
                               </AccordionItem>
                             ))}

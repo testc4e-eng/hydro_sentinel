@@ -47,6 +47,8 @@ class MapKPIItem(BaseModel):
     precip_obs_mm: Optional[float] = None
     precip_obs_time: Optional[datetime] = None
     precip_arome_mm: Optional[float] = None
+    precip_ecmwf_mm: Optional[float] = None
+    precip_ecmwf_time: Optional[datetime] = None
     debit_obs_m3s: Optional[float] = None
     debit_sim_m3s: Optional[float] = None
     debit_obs_time: Optional[datetime] = None
