@@ -1,0 +1,29 @@
+﻿{
+  "prompt_id": "AB-CO-007",
+  "nom": "Synthese de cadrage",
+  "date_run": "2026-03-14",
+  "resume_executif": "HydroSentinel dispose d une base fonctionnelle solide pour la mission Sebou. Le cadrage confirme la valeur metier et les parcours critiques. Le passage en phase suivante est recommande sous conditions explicites de fiabilisation data et d alignement API.",
+  "decision": "GO_CONDITIONNEL",
+  "conditions_go": [
+    "Condition 1: valider et appliquer les seuils qualite minimum des donnees critiques (2026-04-15)",
+    "Condition 2: fermer les ecarts endpoints legacy sur parcours critiques (2026-04-15)",
+    "Condition 3: etablir baseline KPI avec mesures initiales (2026-04-30)",
+    "Condition 4: valider matrice de decision barrage en atelier metier (2026-04-30)"
+  ],
+  "priorites_immediates": [
+    "Qualite et continuite des series critiques",
+    "Fiabilite dashboard principal en contexte evenementiel",
+    "Robustesse import/admin"
+  ],
+  "jalons": [
+    {"jalon": "Validation seuils qualite", "date_cible": "2026-04-15"},
+    {"jalon": "Alignement API critique", "date_cible": "2026-04-15"},
+    {"jalon": "Baseline KPI", "date_cible": "2026-04-30"},
+    {"jalon": "Revue go/no-go phase 2", "date_cible": "2026-05-05"}
+  ],
+  "questions_ouvertes": [
+    "Quelles priorites barrage exactes en premiere vague?",
+    "Quel niveau SLA officiel sur produits thematiques?",
+    "Quel protocole metier en cas de donnees partielles sur fenetre critique?"
+  ]
+}

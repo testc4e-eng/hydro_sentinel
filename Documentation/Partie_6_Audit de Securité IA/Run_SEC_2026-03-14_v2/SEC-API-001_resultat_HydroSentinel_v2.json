@@ -1,0 +1,75 @@
+﻿{
+  "prompt_id": "SEC-API-001",
+  "date_run": "2026-03-14",
+  "projet": "HydroSentinel",
+  "surface_api": [
+    "/api/v1/admin/*",
+    "/api/v1/login/access-token",
+    "/api/v1/ingest/*"
+  ],
+  "faiblesses_api": [
+    {
+      "id": "API-01",
+      "criticite": "critique",
+      "certitude": "constat_probable",
+      "famille": "authorization",
+      "file": "backend/app/api/v1/api.py",
+      "line": 24,
+      "description": "Routes admin montees sans dependance auth/role explicite sur routeurs admin inspectes.",
+      "impact": "Risque d'acces non autorise a des operations admin.",
+      "recommandation": "Appliquer garde role superuser et tests d'autorisation par endpoint."
+    },
+    {
+      "id": "API-02",
+      "criticite": "elevee",
+      "certitude": "constat_probable",
+      "famille": "error_handling",
+      "file": "backend/app/main.py",
+      "line": 39,
+      "description": "debug_error est inclus dans les reponses 500.",
+      "impact": "Fuite d'info interne utile a l'enumeration d'attaque.",
+      "recommandation": "Retirer debug_error cote client hors dev."
+    },
+    {
+      "id": "API-03",
+      "criticite": "elevee",
+      "certitude": "constat_probable",
+      "famille": "upload",
+      "file": "backend/app/api/v1/endpoints/admin_new.py",
+      "line": 944,
+      "description": "Extraction archive via extractall sans controle de chemins.",
+      "impact": "Risque path traversal.",
+      "recommandation": "Verifier chaque entree ZIP avant extraction."
+    },
+    {
+      "id": "API-04",
+      "criticite": "moyenne",
+      "certitude": "constat_probable",
+      "famille": "upload",
+      "file": "backend/app/api/v1/endpoints/admin_new.py",
+      "line": 940,
+      "description": "Chargement upload complet en memoire.",
+      "impact": "Risque DoS memoire/latence.",
+      "recommandation": "Streaming/chunk + limite taille et timeout."
+    },
+    {
+      "id": "API-05",
+      "criticite": "moyenne",
+      "certitude": "hypothese_forte",
+      "famille": "rate_limit",
+      "file": "backend/app/api/v1/api.py",
+      "line": 17,
+      "description": "Aucun mecanisme de rate limiting evident dans le perimetre inspecte.",
+      "impact": "Risque d'abus des endpoints auth/upload/admin.",
+      "recommandation": "Introduire throttling par IP/utilisateur et quotas endpoint."
+    }
+  ],
+  "score_api": {
+    "authn_authz": 4,
+    "validation_entree": 6,
+    "gestion_erreurs": 4,
+    "resilience": 5,
+    "global": 4.8
+  },
+  "decision": "GO_CONDITIONNEL"
+}

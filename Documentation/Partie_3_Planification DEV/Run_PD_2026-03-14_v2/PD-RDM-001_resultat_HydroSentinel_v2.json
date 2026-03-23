@@ -1,0 +1,16 @@
+﻿{
+  "prompt_id": "PD-RDM-001",
+  "date_run": "2026-03-14",
+  "phases": [
+    {"phase":"P1_Socle_Securite","modules":["M1"],"lien_mvp":"direct"},
+    {"phase":"P2_Coeur_Data_Services","modules":["M3","M6"],"lien_mvp":"direct"},
+    {"phase":"P3_Valeur_Metier_MVP","modules":["M4","M2"],"lien_mvp":"direct"},
+    {"phase":"P4_Qualite_Analyse","modules":["M7","M5"],"lien_mvp":"renforcement"},
+    {"phase":"P5_Thematique_Observabilite","modules":["M8","M9"],"lien_mvp":"extension+stabilite"}
+  ],
+  "alertes": [
+    "Eviter demarrage M4 avant stabilisation M3",
+    "Eviter extension thematique avant qualite data minimale",
+    "Eviter mise en charge sans observabilite minimale"
+  ]
+}

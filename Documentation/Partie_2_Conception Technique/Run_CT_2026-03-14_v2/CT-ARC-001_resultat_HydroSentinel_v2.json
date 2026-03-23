@@ -1,0 +1,26 @@
+﻿{
+  "prompt_id": "CT-ARC-001",
+  "date_run": "2026-03-14",
+  "projet": "HydroSentinel",
+  "style_retenu": "monolithe_modulaire_web_plus_jobs_batch",
+  "justification": [
+    "coherent avec implementation actuelle",
+    "complexite maitrisee pour equipe",
+    "evolution progressive possible"
+  ],
+  "composants": [
+    {"id":"C1","nom":"Frontend Dashboard","type":"frontend","priorite":"critique","mvp":true},
+    {"id":"C2","nom":"API Metier FastAPI","type":"backend","priorite":"critique","mvp":true},
+    {"id":"C3","nom":"DB Hydro Data","type":"data","priorite":"critique","mvp":true},
+    {"id":"C4","nom":"Ingestion Import","type":"traitement","priorite":"critique","mvp":true},
+    {"id":"C5","nom":"Data Quality Scan","type":"transverse","priorite":"important","mvp":true},
+    {"id":"C6","nom":"Thematique Flood/Snow","type":"integration","priorite":"important","mvp":true},
+    {"id":"C7","nom":"Observabilite","type":"transverse","priorite":"important","mvp":false}
+  ],
+  "risques": [
+    "dependance vues SQL non completement versionnees",
+    "ecarts endpoints legacy",
+    "observabilite partielle"
+  ],
+  "recommandation": "stabiliser architecture actuelle et fiabiliser data/API avant separation de services"
+}

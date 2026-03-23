@@ -1,0 +1,112 @@
+﻿{
+  "prompt_id": "RC-AQ-001",
+  "date_run": "2026-03-14",
+  "projet": "HydroSentinel",
+  "scope_review": [
+    "hydro-sentinel/src/pages/DataManagement.tsx",
+    "hydro-sentinel/src/lib/api.ts",
+    "backend/app/api/v1/endpoints/admin_new.py"
+  ],
+  "forces": [
+    "buildApiRoot() normalise correctement base URL et prefix API",
+    "get_table() limite les tables CRUD via allow-list",
+    "normalisation source code (template) claire et reutilisable"
+  ],
+  "faiblesses": [
+    "composant frontend monolithique",
+    "type safety faible sur API frontend",
+    "gestion d'erreurs backend souvent silencieuse",
+    "duplication de logique detectee"
+  ],
+  "findings": [
+    {
+      "id": "AQ-01",
+      "severity": "elevee",
+      "axe": "structure",
+      "file": "hydro-sentinel/src/pages/DataManagement.tsx",
+      "line": 1,
+      "observation": "Composant unique de 1837 lignes, responsabilites multiples.",
+      "impact": "Maintenabilite faible, regression plus probable.",
+      "recommendation": "Decouper en sous-composants et hooks metier."
+    },
+    {
+      "id": "AQ-02",
+      "severity": "moyenne",
+      "axe": "robustesse",
+      "file": "hydro-sentinel/src/pages/DataManagement.tsx",
+      "line": 1235,
+      "observation": "Utilisation de Math.random() pour les cles React.",
+      "impact": "Rerender inutile, perte de stabilite de liste.",
+      "recommendation": "Utiliser une cle stable (station_id/basin_id)."
+    },
+    {
+      "id": "AQ-03",
+      "severity": "elevee",
+      "axe": "robustesse",
+      "file": "hydro-sentinel/src/pages/DataManagement.tsx",
+      "line": 1509,
+      "observation": "analyzeFile() declenche a plusieurs changements de formulaire sans anti-race.",
+      "impact": "Reponses out-of-order possibles, etat stale.",
+      "recommendation": "Debounce + annulation requete precedente (AbortController/cancel token)."
+    },
+    {
+      "id": "AQ-04",
+      "severity": "moyenne",
+      "axe": "coherence",
+      "file": "hydro-sentinel/src/lib/api.ts",
+      "line": 50,
+      "observation": "Plusieurs params sont en type any.",
+      "impact": "Type safety reduite, detection tardive des erreurs.",
+      "recommendation": "Introduire interfaces TypeScript pour params/reponses."
+    },
+    {
+      "id": "AQ-05",
+      "severity": "faible",
+      "axe": "clean_code",
+      "file": "hydro-sentinel/src/lib/api.ts",
+      "line": 84,
+      "observation": "console.log en chemin API runtime.",
+      "impact": "Bruit et fuite d'informations contextuelles.",
+      "recommendation": "Supprimer ou logger en mode debug conditionnel."
+    },
+    {
+      "id": "AQ-06",
+      "severity": "moyenne",
+      "axe": "coherence",
+      "file": "backend/app/api/v1/endpoints/admin_new.py",
+      "line": 247,
+      "observation": "Suppression dss_mapping dupliquee deux fois.",
+      "impact": "Surcout DB et lisibilite degradee.",
+      "recommendation": "Conserver un seul bloc de suppression."
+    },
+    {
+      "id": "AQ-07",
+      "severity": "elevee",
+      "axe": "robustesse",
+      "file": "backend/app/api/v1/endpoints/admin_new.py",
+      "line": 250,
+      "observation": "Usage recurrent de except/except Exception: pass.",
+      "impact": "Erreurs masquees, diagnostic difficile.",
+      "recommendation": "Capturer exceptions specifiques + journalisation structuree."
+    },
+    {
+      "id": "AQ-08",
+      "severity": "moyenne",
+      "axe": "lisibilite",
+      "file": "hydro-sentinel/src/pages/DataManagement.tsx",
+      "line": 61,
+      "observation": "Chaines UI mojibake (ex: DonnÃ©es).",
+      "impact": "Qualite percue degradee et comprehension utilisateur impactee.",
+      "recommendation": "Corriger encodage UTF-8 et verifier toutes chaines FR."
+    }
+  ],
+  "scores": {
+    "lisibilite": 6,
+    "structure": 5,
+    "maintenabilite": 5,
+    "coherence": 6,
+    "robustesse": 5,
+    "global": 5.4
+  },
+  "decision": "ACCEPTABLE_AVEC_CORRECTIONS"
+}

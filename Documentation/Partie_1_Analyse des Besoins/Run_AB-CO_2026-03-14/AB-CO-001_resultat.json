@@ -1,0 +1,33 @@
+﻿{
+  "prompt_id": "AB-CO-001",
+  "nom": "Reformuler le besoin",
+  "date_run": "2026-03-14",
+  "cas": "HydroSentinel - Bassin du Sebou",
+  "besoin_reformule": "HydroSentinel doit fournir une lecture operationnelle fiable et rapide de la situation hydro-meteo du bassin du Sebou afin d anticiper les crues, prioriser les zones critiques et appuyer la decision de pilotage des barrages (notamment les lachers) avec un impact aval maitrise.",
+  "probleme_metier": "Decision hydraulique potentiellement tardive ou insuffisamment outillee en contexte evenementiel.",
+  "valeur_attendue": "Reduire le risque d inondation aval par une decision plus anticipee, tracee et fondee sur donnees multi-sources.",
+  "limites_actuelles": [
+    "Qualite et continuite de donnees non uniformes selon entite/periode/source",
+    "Ecarts historiques frontend/backend sur certains endpoints legacy",
+    "Dependance forte a des vues SQL metier"
+  ],
+  "faits": [
+    "Le dashboard principal, les modules d analyse, l import admin et les cartes thematiques sont deja implementes.",
+    "Les sources OBS/SIM/AROME/ECMWF sont utilisees dans l application.",
+    "Le scan de disponibilite data et la gestion de series temporelles sont disponibles."
+  ],
+  "hypotheses": [
+    "Les utilisateurs adopteront le parcours dashboard unique en situation critique.",
+    "Les sources externes resteront disponibles avec qualite suffisante en saison a risque."
+  ],
+  "a_valider": [
+    "Seuils metier definitifs de decision lacher par contexte barrage",
+    "Niveau de service cible pour disponibilite des donnees critiques",
+    "Critere d acceptation metier des cartes thematiques en situation reelle"
+  ],
+  "questions_a_confirmer": [
+    "Quel delai d anticipation minimum est attendu par les equipes metier?",
+    "Quels barrages sont prioritaires dans la premiere vague d industrialisation?",
+    "Quelle est la frequence minimale acceptable de rafraichissement des indicateurs critiques?"
+  ]
+}

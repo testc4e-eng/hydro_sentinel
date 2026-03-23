@@ -1,0 +1,21 @@
+﻿{
+  "prompt_id": "PD-TSK-001",
+  "date_run": "2026-03-14",
+  "projet": "HydroSentinel",
+  "modules": [
+    {"module":"M1_Auth_Acces","mvp":true,"taches":["middleware JWT","protection routes","gestion session frontend"]},
+    {"module":"M2_Referentiel_Geo","mvp":true,"taches":["CRUD stations/bassins","validation geom CRS","pipeline SHP dry_run/commit"]},
+    {"module":"M3_Mesures_Timeseries","mvp":true,"taches":["endpoints timeseries robustes","normalisation source/variable","gestion suppression ciblee"]},
+    {"module":"M4_Dashboard_KPI","mvp":true,"taches":["stabilisation map/points-kpi","stabilisation top-critical","gestion fallback data partielle"]},
+    {"module":"M5_Analyse_MultiSource","mvp":true,"taches":["unification filtres/periodes","continuite multi-source","export table/csv"]},
+    {"module":"M6_Ingestion_Import","mvp":true,"taches":["analyze/execute fiable","templates multi-source","tracabilite imports"]},
+    {"module":"M7_Data_Quality_Scan","mvp":true,"taches":["scan couverture data","rapport anomalies","actions correctives admin"]},
+    {"module":"M8_Thematique_Flood_Snow","mvp":true,"taches":["catalogue/historique/produit","coherence metadonnees","gestion indisponibilite produit"]},
+    {"module":"M9_Observabilite_Audit","mvp":false,"taches":["logs structures","alertes 5xx/latence","tableau de sante services"]}
+  ],
+  "dependances_bloquantes": [
+    "M4 depend de M3 + referentiels M2",
+    "M7 depend de qualite ecriture M6",
+    "M8 depend disponibilite produits thematiques"
+  ]
+}

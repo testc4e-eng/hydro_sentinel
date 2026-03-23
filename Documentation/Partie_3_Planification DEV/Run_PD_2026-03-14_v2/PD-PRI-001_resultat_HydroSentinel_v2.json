@@ -1,0 +1,23 @@
+﻿{
+  "prompt_id": "PD-PRI-001",
+  "date_run": "2026-03-14",
+  "classement": [
+    {"element":"M1_Auth_Acces","priorite":"P1","justification":"socle securite"},
+    {"element":"M3_Mesures_Timeseries","priorite":"P1","justification":"coeur data metier"},
+    {"element":"M4_Dashboard_KPI","priorite":"P1","justification":"valeur decisionnelle immediate"},
+    {"element":"M6_Ingestion_Import","priorite":"P1","justification":"qualite alimentation systeme"},
+    {"element":"M2_Referentiel_Geo","priorite":"P2","justification":"essentiel cartographie/coherence"},
+    {"element":"M7_Data_Quality_Scan","priorite":"P2","justification":"fiabilisation continue"},
+    {"element":"M5_Analyse_MultiSource","priorite":"P2","justification":"valeur analytique forte"},
+    {"element":"M8_Thematique_Flood_Snow","priorite":"P3","justification":"important mais moins bloquant MVP central"},
+    {"element":"M9_Observabilite_Audit","priorite":"P2","justification":"non fonctionnel mais critique avant charge"}
+  ],
+  "socle_technique": ["M1","M3","M6","M4"],
+  "mvp_indispensable": ["M1","M3","M4","M6","M2","M7"],
+  "reportable": ["parties avancees de M8","extensions M9"],
+  "risques_si_mauvais_ordre": [
+    "Dashboard sans donnees fiables",
+    "Import sans controles qualite",
+    "Croissance incidents sans observabilite"
+  ]
+}

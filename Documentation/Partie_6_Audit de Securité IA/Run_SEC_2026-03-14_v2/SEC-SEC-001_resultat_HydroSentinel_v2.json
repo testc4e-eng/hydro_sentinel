@@ -1,0 +1,72 @@
+﻿{
+  "prompt_id": "SEC-SEC-001",
+  "date_run": "2026-03-14",
+  "projet": "HydroSentinel",
+  "familles_risque": [
+    "stockage",
+    "injection",
+    "journalisation",
+    "rotation",
+    "segregation_env",
+    "acces"
+  ],
+  "faiblesses": [
+    {
+      "id": "SEC-01",
+      "criticite": "elevee",
+      "certitude": "constat_probable",
+      "file": "backend/app/core/config.py",
+      "line": 88,
+      "description": "SECRET_KEY de fallback statique dans la configuration.",
+      "impact": "Affaiblit la securite JWT si non surchargee en environnement.",
+      "remediation": "Bloquer le demarrage sur valeur par defaut."
+    },
+    {
+      "id": "SEC-02",
+      "criticite": "elevee",
+      "certitude": "constat_probable",
+      "file": "backend/.env",
+      "line": 1,
+      "description": "Credentials base presents en clair dans un fichier local .env.",
+      "impact": "Risque de fuite via partage local ou mauvaise manipulation.",
+      "remediation": "Utiliser un secret manager / variables injectees, rotation des credentials.",
+      "note": "La valeur complete n'est pas reproduite volontairement."
+    },
+    {
+      "id": "SEC-03",
+      "criticite": "moyenne",
+      "certitude": "constat_probable",
+      "file": "hydro-sentinel/src/pages/Login.tsx",
+      "line": 14,
+      "description": "Identifiants demo pre-remplis et logs auth/token en console.",
+      "impact": "Exposition d'information sensible en exploitation.",
+      "remediation": "Retirer defaults et logs en build non-dev."
+    },
+    {
+      "id": "SEC-04",
+      "criticite": "moyenne",
+      "certitude": "constat_probable",
+      "file": "hydro-sentinel/src/store/authStore.ts",
+      "line": 1,
+      "description": "Token persiste cote client via local storage (middleware persist).",
+      "impact": "Surface de risque augmentee en cas de XSS.",
+      "remediation": "Durcir anti-XSS et evaluer transport token en cookie httpOnly."
+    }
+  ],
+  "plan_remediation": {
+    "p1": [
+      "Rendre SECRET_KEY obligatoire et non-defaut",
+      "Supprimer logs auth/token cote frontend",
+      "Rotation des credentials locaux exposes"
+    ],
+    "p2": [
+      "Politique de rotation periodique des secrets",
+      "Segregation stricte des secrets par environnement"
+    ],
+    "p3": [
+      "Scanner secrets automatise en CI",
+      "Evaluation architecture cookie httpOnly + CSRF"
+    ]
+  },
+  "decision": "GO_CONDITIONNEL"
+}
