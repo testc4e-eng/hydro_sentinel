@@ -8,6 +8,7 @@ from app.api.v1.endpoints import (
     health,
     ingest,
     measurements,
+    recapitulatif,
     sites,
     thematic_maps,
     ts_management,
@@ -19,6 +20,7 @@ api_router = APIRouter()
 api_router.include_router(auth.router, tags=["login"])
 api_router.include_router(sites.router, tags=["sites"])
 api_router.include_router(measurements.router, prefix="/measurements", tags=["measurements"])
+api_router.include_router(recapitulatif.router, prefix="/recapitulatif", tags=["recapitulatif"])
 api_router.include_router(dashboard.router, tags=["dashboard"])
 api_router.include_router(variables.router, tags=["variables"])
 api_router.include_router(admin_new.router, prefix="/admin", tags=["admin"])

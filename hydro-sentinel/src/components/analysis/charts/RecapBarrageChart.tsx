@@ -102,8 +102,8 @@ function sanitizeFilename(rawValue: string): string {
 }
 
 export function RecapBarrageChart({ data, damName, series, vn = 3522.2 }: RecapBarrageChartProps) {
-  const safeData = Array.isArray(data) ? data : [];
-  const safeSeries = Array.isArray(series) && series.length > 0 ? series : buildLegacySeries(safeData);
+  const rawData = Array.isArray(data) ? data : [];
+  const safeSeries = Array.isArray(series) && series.length > 0 ? series : buildLegacySeries(rawData);
   const chartWrapperRef = useRef<HTMLDivElement | null>(null);
   const [leftMinInput, setLeftMinInput] = useState("");
   const [leftMaxInput, setLeftMaxInput] = useState("");
@@ -111,6 +111,23 @@ export function RecapBarrageChart({ data, damName, series, vn = 3522.2 }: RecapB
   const [rightMaxInput, setRightMaxInput] = useState("");
 
   const activeSeries = safeSeries.filter((s) => !!s?.key);
+  const safeData = useMemo(
+    () =>
+      rawData.map((row) => {
+        const next: any = { ...(row || {}) };
+        activeSeries.forEach((serie) => {
+          const rawValue = next[serie.key];
+          if (rawValue === null || rawValue === undefined || rawValue === "") {
+            next[serie.key] = null;
+            return;
+          }
+          const numeric = Number(rawValue);
+          next[serie.key] = Number.isFinite(numeric) ? numeric : null;
+        });
+        return next;
+      }),
+    [activeSeries, rawData],
+  );
   const hasLeft = activeSeries.some((s) => s.axis === "left");
   const hasRight = activeSeries.some((s) => s.axis === "right");
 
@@ -124,6 +141,17 @@ export function RecapBarrageChart({ data, damName, series, vn = 3522.2 }: RecapB
 
   const showValueLabels = safeData.length <= 35;
   const hasVolumeLeft = activeSeries.some((s) => s.axis === "left" && s.unit.toLowerCase().includes("mm"));
+  const hasLeftFiniteValues = useMemo(
+    () =>
+      safeData.some((row) =>
+        activeSeries.some(
+          (serie) => serie.axis === "left" && typeof row?.[serie.key] === "number" && Number.isFinite(row[serie.key]),
+        ),
+      ),
+    [activeSeries, safeData],
+  );
+  const safeVn = Number(vn);
+  const canRenderReferenceLine = hasVolumeLeft && hasLeftFiniteValues && Number.isFinite(safeVn);
   const leftDomain = useMemo<[number | "auto", number | "auto"]>(() => {
     const min = parseScaleInput(leftMinInput);
     const max = parseScaleInput(leftMaxInput);
@@ -312,14 +340,14 @@ export function RecapBarrageChart({ data, damName, series, vn = 3522.2 }: RecapB
             />
             <Legend verticalAlign="bottom" />
 
-            {hasVolumeLeft && (
+            {canRenderReferenceLine && (
               <ReferenceLine
                 yAxisId="left"
-                y={vn}
+                y={safeVn}
                 stroke="#b91c1c"
                 strokeDasharray="6 4"
                 ifOverflow="visible"
-                label={{ value: `Vn=${vn}`, position: "insideTopLeft", fill: "#b91c1c", fontSize: 11 }}
+                label={{ value: `Vn=${safeVn}`, position: "insideTopLeft", fill: "#b91c1c", fontSize: 11 }}
               />
             )}
 

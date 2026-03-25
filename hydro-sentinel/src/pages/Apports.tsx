@@ -189,6 +189,8 @@ export default function Apports() {
         <CompactFilterBar
           filters={filters}
           onChange={setFilters}
+          hideSources
+          hidePeriod
           allowedSourceCodes={allowedSourceCodes}
           sourceLabelOverrides={sourceLabelOverrides}
         />
@@ -199,6 +201,8 @@ export default function Apports() {
         availableVariables={availableVariables}
         availableSources={availableSources}
         defaultVariable="inflow_m3s"
+        period={filters.period}
+        onPeriodChange={(period) => setFilters((prev) => ({ ...prev, period }))}
       />
 
       <Card>

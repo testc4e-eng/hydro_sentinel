@@ -25,6 +25,11 @@ Definir une conception technique coherent (architecture, data model, modules) al
 
 - `./Livrable_Final_Partie_2_GO_NO_GO_v2.md`
 
+## Addendum implementation recent
+
+- `./Addendum_Implementation_2026-03-25.md`
+  - Synthese des modifications techniques implementees (frontend/backend/sql) sans changement de logique metier cible.
+
 ## Doublons deplaces (legacy)
 
 - Ancien run `Run_CT_2026-03-14` deplace vers le dossier racine d'archives `ignorÃ©s/`.

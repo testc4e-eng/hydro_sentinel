@@ -94,9 +94,40 @@ export default function DataManagement() {
 
 function EntityCrud({ type }: { type: string }) {
     const queryClient = useQueryClient();
+    const [providerView, setProviderView] = useState<"ABH" | "DGM">("ABH");
     const { data: entities, isLoading } = useQuery({
         queryKey: ['entities', type],
         queryFn: () => api.getEntities(type),
+    });
+    const { data: dgmBasinsLocal } = useQuery({
+        queryKey: ['dgm-basins-local'],
+        queryFn: async () => {
+            const res = await fetch(`/data/basins_dgm.geojson?v=${Date.now()}`);
+            if (!res.ok) return [];
+            const geojson = await res.json();
+            const features = Array.isArray(geojson?.features) ? geojson.features : [];
+            return features.map((feature: any, index: number) => {
+                const props = feature?.properties ?? {};
+                const rawName =
+                    props.name ??
+                    props.nom ??
+                    props.NOM ??
+                    props.Name ??
+                    props.Name1 ??
+                    props.BASSIN ??
+                    `Bassin DGM ${index + 1}`;
+                const rawCode = props.code ?? props.CODE ?? props.Code ?? props.id ?? props.ID ?? props.OBJECTID ?? null;
+                return {
+                    basin_id: `dgm-${index + 1}`,
+                    code: rawCode ? String(rawCode) : `DGM-${index + 1}`,
+                    name: String(rawName),
+                    level: props.level ?? props.niveau ?? null,
+                    provider: "DGM",
+                    _readOnly: true,
+                };
+            });
+        },
+        enabled: type === 'bassins',
     });
 
     const [searchTerm, setSearchTerm] = useState("");
@@ -105,8 +136,27 @@ function EntityCrud({ type }: { type: string }) {
     const [selectedEntity, setSelectedEntity] = useState<any>(null);
     const [deleteTarget, setDeleteTarget] = useState<any>(null);
 
+    const providerScopedEntities = useMemo(() => {
+        const baseEntities = Array.isArray(entities) ? entities : [];
+        if (type === 'stations') {
+            const withProvider = baseEntities.map((e: any) => {
+                const stationType = String(e.station_type || '').toLowerCase();
+                const provider = stationType.includes('barrage') ? 'ABH' : 'DGM';
+                return { ...e, provider };
+            });
+            return withProvider.filter((e: any) => e.provider === providerView);
+        }
+        if (type === 'bassins') {
+            if (providerView === 'DGM') {
+                return Array.isArray(dgmBasinsLocal) ? dgmBasinsLocal : [];
+            }
+            return baseEntities.map((e: any) => ({ ...e, provider: 'ABH' }));
+        }
+        return baseEntities;
+    }, [entities, type, providerView, dgmBasinsLocal]);
+
     // Filter
-    const filteredEntities = entities?.filter((e: any) => {
+    const filteredEntities = providerScopedEntities?.filter((e: any) => {
         const term = searchTerm.toLowerCase();
         const name = (e.name || e.label || "").toString().toLowerCase();
         const code = (e.code || e.alias || "").toString().toLowerCase();
@@ -168,6 +218,26 @@ function EntityCrud({ type }: { type: string }) {
                                     className="pl-8 w-[200px]"
                                 />
                             </div>
+                            {(type === 'stations' || type === 'bassins') && (
+                                <div className="flex items-center gap-1 rounded-md border p-1">
+                                    <Button
+                                        size="sm"
+                                        variant={providerView === "ABH" ? "default" : "ghost"}
+                                        onClick={() => setProviderView("ABH")}
+                                        className="h-7 px-3"
+                                    >
+                                        ABH
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant={providerView === "DGM" ? "default" : "ghost"}
+                                        onClick={() => setProviderView("DGM")}
+                                        className="h-7 px-3"
+                                    >
+                                        DGM
+                                    </Button>
+                                </div>
+                            )}
                             {type === 'stations' && (
                                 <Button size="sm" onClick={() => { setSelectedEntity(null); setDialogMode('create'); }}>
                                     <Plus className="mr-2 h-4 w-4"/> Nouveau
@@ -195,13 +265,16 @@ function EntityCrud({ type }: { type: string }) {
                                                 Type {sortConfig?.key === 'station_type' && <ArrowUpDown className="inline h-3 w-3 ml-1"/>}
                                             </TableHead>
                                         )}
+                                        {(type === 'stations' || type === 'bassins') && (
+                                            <TableHead>Source</TableHead>
+                                        )}
                                         <TableHead className="text-right">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {sortedEntities.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={4} className="text-center h-24 text-muted-foreground">
+                                            <TableCell colSpan={type === 'stations' ? 5 : 4} className="text-center h-24 text-muted-foreground">
                                                 Aucun résultat trouvé.
                                             </TableCell>
                                         </TableRow>
@@ -215,24 +288,37 @@ function EntityCrud({ type }: { type: string }) {
                                                         <Badge variant="outline">{entity.station_type || 'N/A'}</Badge>
                                                     </TableCell>
                                                 )}
+                                                {(type === 'stations' || type === 'bassins') && (
+                                                    <TableCell>
+                                                        <Badge variant={entity.provider === 'ABH' ? 'default' : 'secondary'}>
+                                                            {entity.provider || (providerView === 'ABH' ? 'ABH' : 'DGM')}
+                                                        </Badge>
+                                                    </TableCell>
+                                                )}
                                                 <TableCell className="text-right space-x-1">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        onClick={() => { setSelectedEntity(entity); setDialogMode('edit'); }}
-                                                        title="Modifier"
-                                                    >
-                                                        <Edit className="h-4 w-4" />
-                                                    </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="text-red-500 hover:text-red-600"
-                                                        onClick={() => setDeleteTarget(entity)}
-                                                        title="Supprimer"
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
+                                                    {!entity._readOnly ? (
+                                                        <>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                onClick={() => { setSelectedEntity(entity); setDialogMode('edit'); }}
+                                                                title="Modifier"
+                                                            >
+                                                                <Edit className="h-4 w-4" />
+                                                            </Button>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="text-red-500 hover:text-red-600"
+                                                                onClick={() => setDeleteTarget(entity)}
+                                                                title="Supprimer"
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        </>
+                                                    ) : (
+                                                        <span className="text-xs text-muted-foreground">Lecture seule</span>
+                                                    )}
                                                 </TableCell>
                                             </TableRow>
                                         ))

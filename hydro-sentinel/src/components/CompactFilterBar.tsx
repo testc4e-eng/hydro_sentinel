@@ -18,6 +18,7 @@ interface Props {
   filters: CompactFilters;
   onChange: (f: CompactFilters) => void;
   hideSources?: boolean;
+  hidePeriod?: boolean;
   allowedSourceCodes?: string[];
   sourceLabelOverrides?: Record<string, string>;
 }
@@ -56,9 +57,14 @@ export function CompactFilterBar({
   filters,
   onChange,
   hideSources = false,
+  hidePeriod = false,
   allowedSourceCodes,
   sourceLabelOverrides,
 }: Props) {
+  if (hideSources && hidePeriod) {
+    return null;
+  }
+
   const { data: sourcesResult } = useSources();
   const rawSources = sourcesResult?.data?.data ?? [];
   const sources = allowedSourceCodes?.length
@@ -139,23 +145,25 @@ export function CompactFilterBar({
         </>
       )}
 
-      <div className="flex items-center gap-2">
-        <span className="whitespace-nowrap text-xs text-muted-foreground">Periode :</span>
-        <Select value={filters.period} onValueChange={(value) => set("period", value)}>
-          <SelectTrigger className="h-8 w-[110px] text-xs">
-            <SelectValue placeholder="Periode" />
-          </SelectTrigger>
-          <SelectContent>
-            {periods.map((periodOption) => (
-              <SelectItem key={periodOption.value} value={periodOption.value}>
-                {periodOption.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      {!hidePeriod && (
+        <div className="flex items-center gap-2">
+          <span className="whitespace-nowrap text-xs text-muted-foreground">Periode :</span>
+          <Select value={filters.period} onValueChange={(value) => set("period", value)}>
+            <SelectTrigger className="h-8 w-[110px] text-xs">
+              <SelectValue placeholder="Periode" />
+            </SelectTrigger>
+            <SelectContent>
+              {periods.map((periodOption) => (
+                <SelectItem key={periodOption.value} value={periodOption.value}>
+                  {periodOption.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
-      {filters.period === "custom" && (
+      {!hidePeriod && filters.period === "custom" && (
         <>
           <div className="h-5 w-[1px] bg-border" />
 

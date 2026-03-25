@@ -812,3 +812,92 @@ async def delete_station_source_series(
     except SQLAlchemyError as exc:
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Erreur SQL: {type(exc).__name__}") from exc
+
+
+@router.delete("/data-availability/basins/{basin_id}/variables/{variable_code}/sources/{source_code}")
+async def delete_basin_source_series(
+    basin_id: str,
+    variable_code: str,
+    source_code: str,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Delete basin measurements for one variable/source pair.
+    Optional start_time/end_time can narrow deletion to the exact period shown in scanner.
+    """
+    normalized_basin_id = (basin_id or "").strip()
+    normalized_variable = (variable_code or "").strip()
+    normalized_source = (source_code or "").strip().upper()
+
+    if not normalized_basin_id:
+        raise HTTPException(status_code=400, detail="basin_id est obligatoire.")
+    if not normalized_variable:
+        raise HTTPException(status_code=400, detail="variable_code est obligatoire.")
+    if not normalized_source:
+        raise HTTPException(status_code=400, detail="source_code est obligatoire.")
+
+    try:
+        variable_res = await db.execute(
+            text("SELECT variable_id FROM ref.variable WHERE code = :code"),
+            {"code": normalized_variable},
+        )
+        variable_row = variable_res.first()
+        if not variable_row:
+            raise HTTPException(status_code=404, detail=f"Variable '{normalized_variable}' introuvable.")
+
+        source_res = await db.execute(
+            text("SELECT source_id FROM ref.source WHERE UPPER(code) = :code"),
+            {"code": normalized_source},
+        )
+        source_row = source_res.first()
+        if not source_row:
+            raise HTTPException(status_code=404, detail=f"Source '{normalized_source}' introuvable.")
+
+        where_clauses = [
+            "basin_id::text = :basin_id",
+            "variable_id = :variable_id",
+            "source_id = :source_id",
+        ]
+        params: Dict[str, Any] = {
+            "basin_id": normalized_basin_id,
+            "variable_id": variable_row[0],
+            "source_id": source_row[0],
+        }
+        if start_time:
+            where_clauses.append("time::timestamptz >= CAST(:start_time AS timestamptz)")
+            params["start_time"] = start_time
+        if end_time:
+            where_clauses.append("time::timestamptz <= CAST(:end_time AS timestamptz)")
+            params["end_time"] = end_time
+
+        delete_sql = f"""
+                DELETE FROM ts.basin_measurement
+                WHERE {' AND '.join(where_clauses)}
+                """
+        delete_result = await db.execute(text(delete_sql), params)
+        deleted_count = int(delete_result.rowcount or 0)
+
+        if deleted_count == 0:
+            raise HTTPException(
+                status_code=404,
+                detail="Aucune donnee trouvee pour cette combinaison bassin/variable/source/periode.",
+            )
+
+        await db.commit()
+        return {
+            "status": "success",
+            "basin_id": normalized_basin_id,
+            "variable_code": normalized_variable,
+            "source_code": normalized_source,
+            "start_time": start_time,
+            "end_time": end_time,
+            "deleted_count": deleted_count,
+        }
+    except HTTPException:
+        await db.rollback()
+        raise
+    except SQLAlchemyError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erreur SQL: {type(exc).__name__} - {str(exc)}") from exc

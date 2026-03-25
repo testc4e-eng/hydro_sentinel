@@ -46,12 +46,36 @@ const severityColors = {
   critical: '#ef4444' // red-500
 };
 
-export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage' | 'Poste Pluviométrique' | 'Station hydrologique' | 'point resultats' }) {
+type BasinMode = 'ABH' | 'DGM' | null;
+
+interface HydroMapProps {
+  filterType?: 'all' | 'Barrage' | 'Poste Pluviométrique' | 'Poste Pluviometrique' | 'Station hydrologique' | 'point resultats';
+  bassinsVisible?: boolean;
+  bassinsType?: BasinMode;
+}
+
+interface BasinRecord {
+  id: string;
+  name: string;
+  code: string | null;
+  level: string | number | null;
+  geometry: any;
+}
+
+const BASINS_ABH_SOURCE_ID = 'basins-abh';
+const BASINS_DGM_SOURCE_ID = 'basins-dgm';
+const BASINS_ABH_FILL_LAYER_ID = 'basins-abh-fill';
+const BASINS_ABH_LINE_LAYER_ID = 'basins-abh-outline';
+const BASINS_DGM_FILL_LAYER_ID = 'basins-dgm-fill';
+const BASINS_DGM_LINE_LAYER_ID = 'basins-dgm-outline';
+
+export function HydroMap({ filterType = 'all', bassinsVisible = false, bassinsType = null }: HydroMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const { selectedBasinId, setSelectedBasinId, mapDisplayMode, setMapDisplayMode } = useDashboardStore();
   const [points, setPoints] = React.useState<MapPoint[]>([]);
-  const [basins, setBasins] = React.useState<any[]>([]);
+  const [basinsAbh, setBasinsAbh] = React.useState<any[]>([]);
+  const [basinsDgm, setBasinsDgm] = React.useState<any[]>([]);
   const [sourceMode, setSourceMode] = React.useState<'OBS' | 'SIM'>('OBS');
   const hasHydroSimulatedData = useMemo(
     () => points.some((p) => p.debit_sim_m3s !== null || p.volume_sim_hm3 !== null),
@@ -62,6 +86,11 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
     [points]
   );
   const canUseSimulatedSource = mapDisplayMode === 'precip' ? hasForecastPrecipData : hasHydroSimulatedData;
+  const normalizeType = (value: string | null | undefined): string =>
+    String(value ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
 
   const escapeHtml = (value: unknown): string => {
     if (value === null || value === undefined) return '--';
@@ -105,6 +134,30 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
     return severity;
   };
 
+  const mapGeoJsonFeaturesToBasins = (features: any[]): BasinRecord[] => {
+    return (features ?? [])
+      .filter((feature: any) => feature?.geometry)
+      .map((feature: any, index: number) => {
+        const props = feature?.properties ?? {};
+        const rawName =
+          props.name ??
+          props.nom ??
+          props.NOM ??
+          props.Name ??
+          props.Name1 ??
+          props.BASSIN ??
+          `Bassin DGM ${index + 1}`;
+        const rawCode = props.code ?? props.CODE ?? props.Code ?? props.id ?? props.ID ?? props.OBJECTID ?? null;
+        return {
+          id: String(rawCode ?? `dgm-${index + 1}`),
+          name: String(rawName),
+          code: rawCode !== null && rawCode !== undefined ? String(rawCode) : null,
+          level: props.level ?? props.niveau ?? null,
+          geometry: feature.geometry,
+        };
+      });
+  };
+
   useEffect(() => {
     if (!canUseSimulatedSource && sourceMode === 'SIM') {
       setSourceMode('OBS');
@@ -121,11 +174,49 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
       })
       .catch(err => console.error("Failed to load map points", err));
       
-    // Fetch Basins
-    api.get<any[]>('/basins')
-      .then(res => {
-        console.log("ðŸŒ² fetched basins:", res.data.length);
-        setBasins(res.data);
+    // Fetch Basins by type (with fallback for legacy API that returns a single list)
+    Promise.allSettled([
+      api.get<any[]>('/basins', { params: { provider: 'ABH' } }),
+      api.get<any[]>('/basins', { params: { provider: 'DGM' } }),
+      api.get<any[]>('/basins'),
+      fetch(`/data/basins_dgm.geojson?v=${Date.now()}`).then((response) => {
+        if (!response.ok) throw new Error(`Failed to load local DGM basins (${response.status})`);
+        return response.json();
+      }),
+    ])
+      .then(([abhRes, dgmRes, legacyRes, localDgmRes]) => {
+        const legacyBasins = legacyRes.status === 'fulfilled' ? legacyRes.value.data ?? [] : [];
+        const abhBasins = abhRes.status === 'fulfilled' ? abhRes.value.data ?? [] : [];
+        const dgmBasins = dgmRes.status === 'fulfilled' ? dgmRes.value.data ?? [] : [];
+        const localDgmBasins =
+          localDgmRes.status === 'fulfilled'
+            ? mapGeoJsonFeaturesToBasins(localDgmRes.value?.features ?? [])
+            : [];
+
+        const hasProviderTag = legacyBasins.some((b: any) => {
+          const provider = String(b?.provider ?? b?.source ?? b?.agency ?? '').toUpperCase();
+          return provider.includes('ABH') || provider.includes('DGM');
+        });
+
+        const splitAbh = hasProviderTag
+          ? legacyBasins.filter((b: any) => String(b?.provider ?? b?.source ?? b?.agency ?? '').toUpperCase().includes('ABH'))
+          : [];
+        const splitDgm = hasProviderTag
+          ? legacyBasins.filter((b: any) => String(b?.provider ?? b?.source ?? b?.agency ?? '').toUpperCase().includes('DGM'))
+          : [];
+
+        const finalAbh = abhBasins.length > 0 ? abhBasins : (splitAbh.length > 0 ? splitAbh : legacyBasins);
+        // DGM must use local SHP-derived GeoJSON first to avoid API/provider mixups.
+        const finalDgm = localDgmBasins.length > 0
+          ? localDgmBasins
+          : (dgmBasins.length > 0
+            ? dgmBasins
+            : (splitDgm.length > 0 ? splitDgm : legacyBasins));
+
+        console.log('fetched basins ABH:', finalAbh.length);
+        console.log('fetched basins DGM:', finalDgm.length);
+        setBasinsAbh(finalAbh);
+        setBasinsDgm(finalDgm);
       })
       .catch(err => console.error("Failed to load basins", err));
   }, []);
@@ -134,7 +225,7 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
     type: 'FeatureCollection',
     features: points
       .filter(p => p.lon !== null && p.lat !== null && p.lon !== undefined && p.lat !== undefined)
-      .filter(p => filterType === 'all' || p.station_type === filterType)
+      .filter(p => filterType === 'all' || normalizeType(p.station_type) === normalizeType(filterType))
       .map(p => ({
         type: 'Feature',
         geometry: { type: 'Point', coordinates: [p.lon, p.lat] },
@@ -172,9 +263,9 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
       }))
   }), [points, mapDisplayMode, filterType, sourceMode]);
 
-  const basinGeoJson = useMemo(() => ({
+  const basinAbhGeoJson = useMemo(() => ({
     type: 'FeatureCollection',
-    features: basins
+    features: basinsAbh
       .filter(b => b.geometry !== null && b.geometry !== undefined)
       .map(b => ({
         type: 'Feature',
@@ -186,7 +277,39 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
           level: b.level
         }
       }))
-  }), [basins]);
+  }), [basinsAbh]);
+
+  const basinDgmGeoJson = useMemo(() => ({
+    type: 'FeatureCollection',
+    features: basinsDgm
+      .filter(b => b.geometry !== null && b.geometry !== undefined)
+      .map(b => ({
+        type: 'Feature',
+        geometry: b.geometry,
+        properties: {
+          id: b.id,
+          name: b.name,
+          code: b.code,
+          level: b.level
+        }
+      }))
+  }), [basinsDgm]);
+
+  const setBasinsVisibility = (targetMap: maplibregl.Map, visible: boolean, type: BasinMode) => {
+    const abhVisibility = visible && type === 'ABH' ? 'visible' : 'none';
+    const dgmVisibility = visible && type === 'DGM' ? 'visible' : 'none';
+
+    [BASINS_ABH_FILL_LAYER_ID, BASINS_ABH_LINE_LAYER_ID].forEach((layerId) => {
+      if (targetMap.getLayer(layerId)) {
+        targetMap.setLayoutProperty(layerId, 'visibility', abhVisibility);
+      }
+    });
+    [BASINS_DGM_FILL_LAYER_ID, BASINS_DGM_LINE_LAYER_ID].forEach((layerId) => {
+      if (targetMap.getLayer(layerId)) {
+        targetMap.setLayoutProperty(layerId, 'visibility', dgmVisibility);
+      }
+    });
+  };
 
   useEffect(() => {
     if (map.current || !mapContainer.current) return;
@@ -201,9 +324,14 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
     map.current.on('load', () => {
       if (!map.current) return;
 
-      map.current.addSource('basins', {
+      map.current.addSource(BASINS_ABH_SOURCE_ID, {
         type: 'geojson',
-        data: basinGeoJson as any
+        data: basinAbhGeoJson as any
+      });
+
+      map.current.addSource(BASINS_DGM_SOURCE_ID, {
+        type: 'geojson',
+        data: basinDgmGeoJson as any
       });
 
       map.current.addSource('stations', {
@@ -211,25 +339,47 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
         data: pointGeoJson as any
       });
 
-      // Basin Fill Layer
       map.current.addLayer({
-        id: 'basins-fill',
+        id: BASINS_ABH_FILL_LAYER_ID,
         type: 'fill',
-        source: 'basins',
+        source: BASINS_ABH_SOURCE_ID,
+        layout: { visibility: 'none' },
         paint: {
-          'fill-color': '#0369a1', // sky-700
-          'fill-opacity': 0.15
+          'fill-color': '#3B82F6',
+          'fill-opacity': 0.2
         }
       });
 
-      // Basin Outline Layer
       map.current.addLayer({
-        id: 'basins-outline',
+        id: BASINS_ABH_LINE_LAYER_ID,
         type: 'line',
-        source: 'basins',
+        source: BASINS_ABH_SOURCE_ID,
+        layout: { visibility: 'none' },
         paint: {
-          'line-color': '#0ea5e9', // sky-500
-          'line-width': 1.5
+          'line-color': '#3B82F6',
+          'line-width': 2
+        }
+      });
+
+      map.current.addLayer({
+        id: BASINS_DGM_FILL_LAYER_ID,
+        type: 'fill',
+        source: BASINS_DGM_SOURCE_ID,
+        layout: { visibility: 'none' },
+        paint: {
+          'fill-color': '#10B981',
+          'fill-opacity': 0.2
+        }
+      });
+
+      map.current.addLayer({
+        id: BASINS_DGM_LINE_LAYER_ID,
+        type: 'line',
+        source: BASINS_DGM_SOURCE_ID,
+        layout: { visibility: 'none' },
+        paint: {
+          'line-color': '#10B981',
+          'line-width': 2
         }
       });
 
@@ -475,8 +625,10 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
           `)
           .addTo(map.current!);
       });
+
+      setBasinsVisibility(map.current, bassinsVisible, bassinsType);
     });
-  }, []);
+  }, [basinAbhGeoJson, basinDgmGeoJson, bassinsVisible, bassinsType, pointGeoJson]);
 
   // Update source data when points change or mode changes
   useEffect(() => {
@@ -486,10 +638,21 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
   }, [pointGeoJson]);
 
   useEffect(() => {
-    if (map.current && map.current.getSource('basins')) {
-      (map.current.getSource('basins') as maplibregl.GeoJSONSource).setData(basinGeoJson as any);
+    if (map.current && map.current.getSource(BASINS_ABH_SOURCE_ID)) {
+      (map.current.getSource(BASINS_ABH_SOURCE_ID) as maplibregl.GeoJSONSource).setData(basinAbhGeoJson as any);
     }
-  }, [basinGeoJson]);
+  }, [basinAbhGeoJson]);
+
+  useEffect(() => {
+    if (map.current && map.current.getSource(BASINS_DGM_SOURCE_ID)) {
+      (map.current.getSource(BASINS_DGM_SOURCE_ID) as maplibregl.GeoJSONSource).setData(basinDgmGeoJson as any);
+    }
+  }, [basinDgmGeoJson]);
+
+  useEffect(() => {
+    if (!map.current) return;
+    setBasinsVisibility(map.current, bassinsVisible, bassinsType);
+  }, [bassinsVisible, bassinsType]);
 
   return (
     <div className="relative w-full h-full rounded-lg overflow-hidden border">
@@ -584,6 +747,20 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
             )}
             {mapDisplayMode === 'volume' && (
                <div className="w-full h-2 rounded bg-gradient-to-r from-orange-100 via-orange-500 to-orange-900"></div>
+            )}
+            {bassinsVisible && bassinsType && (
+              <div className="mt-1 flex items-center gap-2">
+                <div
+                  className="h-3 w-3 rounded-sm border"
+                  style={{
+                    backgroundColor: bassinsType === 'ABH' ? 'rgba(59,130,246,0.2)' : 'rgba(16,185,129,0.2)',
+                    borderColor: bassinsType === 'ABH' ? '#3B82F6' : '#10B981'
+                  }}
+                />
+                <span className="text-[10px]">
+                  {bassinsType === 'ABH' ? 'Bassins ABH' : 'Bassins DGM'}
+                </span>
+              </div>
             )}
           </div>
         </div>

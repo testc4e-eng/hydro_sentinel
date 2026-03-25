@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -149,22 +149,27 @@ function getStatusLabel(totalRecords: number): string {
 }
 
 interface DeleteSourcePayload {
-  stationId: string;
-  stationName: string;
+  entityType: "station" | "basin";
+  entityId: string;
+  entityName: string;
   variableCode: string;
   sourceCode: string;
+  firstRecord?: string | null;
+  lastRecord?: string | null;
 }
 
 function TimeseriesDetailsTable({
   variables,
-  stationId,
-  stationName,
+  entityType,
+  entityId,
+  entityName,
   onDeleteSource,
   deletingKey,
 }: {
   variables: Record<string, VariableAvailability>;
-  stationId?: string;
-  stationName?: string;
+  entityType?: "station" | "basin";
+  entityId?: string;
+  entityName?: string;
   onDeleteSource?: (payload: DeleteSourcePayload) => Promise<void>;
   deletingKey?: string | null;
 }) {
@@ -195,7 +200,7 @@ function TimeseriesDetailsTable({
           <TableHead>Source</TableHead>
           <TableHead>Enregistrements</TableHead>
           <TableHead>Periode</TableHead>
-          {onDeleteSource && stationId ? <TableHead className="text-right">Action</TableHead> : null}
+          {onDeleteSource && entityId && entityType ? <TableHead className="text-right">Action</TableHead> : null}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -205,24 +210,27 @@ function TimeseriesDetailsTable({
             <TableCell>{row.sourceCode}</TableCell>
             <TableCell>{formatCount(row.recordCount)}</TableCell>
             <TableCell>{formatPeriod(row.firstRecord, row.lastRecord)}</TableCell>
-            {onDeleteSource && stationId ? (
+            {onDeleteSource && entityId && entityType ? (
               <TableCell className="text-right">
                 <Button
                   type="button"
                   variant="destructive"
                   size="sm"
                   className="h-8"
-                  disabled={deletingKey === `${stationId}:${row.variableCode}:${row.sourceCode}`}
+                  disabled={deletingKey === `${entityType}:${entityId}:${row.variableCode}:${row.sourceCode}`}
                   onClick={() =>
                     onDeleteSource({
-                      stationId,
-                      stationName: stationName || stationId,
+                      entityType,
+                      entityId,
+                      entityName: entityName || entityId,
                       variableCode: row.variableCode,
                       sourceCode: row.sourceCode,
+                      firstRecord: row.firstRecord,
+                      lastRecord: row.lastRecord,
                     })
                   }
                 >
-                  {deletingKey === `${stationId}:${row.variableCode}:${row.sourceCode}` ? (
+                  {deletingKey === `${entityType}:${entityId}:${row.variableCode}:${row.sourceCode}` ? (
                     <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                   ) : (
                     <Trash2 className="mr-1 h-3 w-3" />
@@ -245,6 +253,8 @@ export function DataAvailabilityScanner() {
   const [report, setReport] = useState<DataAvailabilityReport | null>(null);
   const [stationFilter, setStationFilter] = useState("");
   const [basinFilter, setBasinFilter] = useState("");
+  const [basinShape, setBasinShape] = useState<"ABH" | "DGM">("ABH");
+  const [dgmBasinEntities, setDgmBasinEntities] = useState<BasinEntityAvailability[]>([]);
   const [stationTypeFilter, setStationTypeFilter] = useState<StationCategory | "all">("all");
   const [stationDataFilter, setStationDataFilter] = useState<StationDataFilter>("all");
   const { toast } = useToast();
@@ -260,6 +270,74 @@ export function DataAvailabilityScanner() {
 
   const stationEntities = useMemo(() => report?.station_entities ?? [], [report]);
   const basinEntities = useMemo(() => report?.basin_entities ?? [], [report]);
+  const normalizeText = (value: unknown): string =>
+    String(value ?? "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadDgmBasins = async () => {
+      try {
+        const response = await fetch(`/data/basins_dgm.geojson?v=${Date.now()}`);
+        if (!response.ok) {
+          if (!cancelled) setDgmBasinEntities([]);
+          return;
+        }
+        const geojson = await response.json();
+        const features = Array.isArray(geojson?.features) ? geojson.features : [];
+
+        const mapped = features.map((feature: any, index: number) => {
+          const props = feature?.properties ?? {};
+          const rawName =
+            props.name ??
+            props.nom ??
+            props.NOM ??
+            props.Name ??
+            props.Name1 ??
+            props.BASSIN ??
+            `Bassin DGM ${index + 1}`;
+          const rawCode = props.code ?? props.CODE ?? props.Code ?? props.id ?? props.ID ?? null;
+          const codeNorm = normalizeText(rawCode);
+          const nameNorm = normalizeText(rawName);
+          const matchedAbh = basinEntities.find((abh) => {
+            const abhCode = normalizeText(abh.basin_code);
+            const abhName = normalizeText(abh.basin_name);
+            return (codeNorm && abhCode && codeNorm === abhCode) || (nameNorm && abhName && nameNorm === abhName);
+          });
+
+          return {
+            basin_id: matchedAbh?.basin_id || `dgm-${index + 1}`,
+            basin_code: rawCode ? String(rawCode) : null,
+            basin_name: String(rawName),
+            level: matchedAbh?.level ?? null,
+            total_records: matchedAbh?.total_records ?? 0,
+            variable_count: matchedAbh?.variable_count ?? 0,
+            source_count: matchedAbh?.source_count ?? 0,
+            first_record: matchedAbh?.first_record ?? null,
+            last_record: matchedAbh?.last_record ?? null,
+            variables: matchedAbh?.variables ?? {},
+          } as BasinEntityAvailability;
+        });
+
+        if (!cancelled) setDgmBasinEntities(mapped);
+      } catch {
+        if (!cancelled) setDgmBasinEntities([]);
+      }
+    };
+    loadDgmBasins();
+    return () => {
+      cancelled = true;
+    };
+  }, [basinEntities]);
+
+  const basinEntitiesByShape = useMemo(
+    () => (basinShape === "ABH" ? basinEntities : dgmBasinEntities),
+    [basinEntities, basinShape, dgmBasinEntities],
+  );
+
   const variableTimeStats = useMemo(() => report?.summary.variable_time_stats ?? [], [report]);
 
   const stationsWithData = useMemo(() => {
@@ -318,14 +396,14 @@ export function DataAvailabilityScanner() {
 
   const filteredBasinEntities = useMemo(() => {
     const q = basinFilter.trim().toLowerCase();
-    if (!q) return basinEntities;
+    if (!q) return basinEntitiesByShape;
 
-    return basinEntities.filter((entity) =>
+    return basinEntitiesByShape.filter((entity) =>
       [entity.basin_name, entity.basin_code, entity.level?.toString()]
         .filter(Boolean)
         .some((value) => (value ?? "").toLowerCase().includes(q)),
     );
-  }, [basinEntities, basinFilter]);
+  }, [basinEntitiesByShape, basinFilter]);
 
   const scanData = async () => {
     setLoading(true);
@@ -366,22 +444,34 @@ export function DataAvailabilityScanner() {
     }
   };
 
-  const deleteStationSource = async ({
-    stationId,
-    stationName,
+  const deleteSourceSeries = async ({
+    entityType,
+    entityId,
+    entityName,
     variableCode,
     sourceCode,
+    firstRecord,
+    lastRecord,
   }: DeleteSourcePayload) => {
+    const scope = entityType === "station" ? "station" : "bassin";
     const confirmed = window.confirm(
-      `Supprimer toutes les donnees pour ${stationName} - ${variableCode}/${sourceCode} ?`,
+      `Supprimer les donnees ${scope} pour ${entityName} - ${variableCode}/${sourceCode}${firstRecord && lastRecord ? ` (${formatPeriod(firstRecord, lastRecord)})` : ""} ?`,
     );
     if (!confirmed) return;
 
-    const key = `${stationId}:${variableCode}:${sourceCode}`;
+    const key = `${entityType}:${entityId}:${variableCode}:${sourceCode}`;
     setDeletingKey(key);
 
     try {
-      const deleteEndpoint = `${apiRoot}/admin/data-availability/stations/${encodeURIComponent(stationId)}/variables/${encodeURIComponent(variableCode)}/sources/${encodeURIComponent(sourceCode)}`;
+      const basePath = entityType === "station"
+        ? `${apiRoot}/admin/data-availability/stations/${encodeURIComponent(entityId)}/variables/${encodeURIComponent(variableCode)}/sources/${encodeURIComponent(sourceCode)}`
+        : `${apiRoot}/admin/data-availability/basins/${encodeURIComponent(entityId)}/variables/${encodeURIComponent(variableCode)}/sources/${encodeURIComponent(sourceCode)}`;
+      const qs = new URLSearchParams();
+      if (entityType === "station") {
+        if (firstRecord) qs.set("start_time", firstRecord);
+        if (lastRecord) qs.set("end_time", lastRecord);
+      }
+      const deleteEndpoint = qs.toString() ? `${basePath}?${qs.toString()}` : basePath;
       const res = await fetch(deleteEndpoint, {
         method: "DELETE",
         headers: { Accept: "application/json" },
@@ -397,7 +487,7 @@ export function DataAvailabilityScanner() {
 
       toast({
         title: "Suppression reussie",
-        description: `${formatCount(deletedCount)} enregistrements supprimes pour ${variableCode}/${sourceCode}.`,
+        description: `${formatCount(deletedCount)} enregistrements supprimes pour ${entityName} (${variableCode}/${sourceCode}).`,
       });
 
       await scanData();
@@ -779,9 +869,10 @@ export function DataAvailabilityScanner() {
                                   </p>
                                   <TimeseriesDetailsTable
                                     variables={station.variables}
-                                    stationId={station.station_id}
-                                    stationName={station.station_name}
-                                    onDeleteSource={deleteStationSource}
+                                    entityType="station"
+                                    entityId={station.station_id}
+                                    entityName={station.station_name}
+                                    onDeleteSource={deleteSourceSeries}
                                     deletingKey={deletingKey}
                                   />
                                 </AccordionContent>
@@ -793,6 +884,25 @@ export function DataAvailabilityScanner() {
                     </TabsContent>
 
                     <TabsContent value="basins" className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">Shape :</span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={basinShape === "ABH" ? "default" : "outline"}
+                          onClick={() => setBasinShape("ABH")}
+                        >
+                          ABH
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={basinShape === "DGM" ? "default" : "outline"}
+                          onClick={() => setBasinShape("DGM")}
+                        >
+                          DGM
+                        </Button>
+                      </div>
                       <Input
                         placeholder="Filtrer par nom, code ou niveau"
                         value={basinFilter}
@@ -829,7 +939,14 @@ export function DataAvailabilityScanner() {
                                   <p className="text-xs text-muted-foreground">
                                     Periode: {formatPeriod(basin.first_record, basin.last_record)}
                                   </p>
-                                  <TimeseriesDetailsTable variables={basin.variables} />
+                                  <TimeseriesDetailsTable
+                                    variables={basin.variables}
+                                    entityType="basin"
+                                    entityId={basin.basin_id}
+                                    entityName={basin.basin_name}
+                                    onDeleteSource={deleteSourceSeries}
+                                    deletingKey={deletingKey}
+                                  />
                                 </AccordionContent>
                               </AccordionItem>
                             ))}

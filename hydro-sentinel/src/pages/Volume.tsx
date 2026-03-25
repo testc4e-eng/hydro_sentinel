@@ -224,6 +224,8 @@ export default function Volume() {
         <CompactFilterBar
           filters={filters}
           onChange={setFilters}
+          hideSources
+          hidePeriod
           allowedSourceCodes={allowedSourceCodes}
           sourceLabelOverrides={sourceLabelOverrides}
         />
@@ -234,6 +236,8 @@ export default function Volume() {
         availableVariables={availableVariables}
         availableSources={availableSources}
         defaultVariable="volume_hm3"
+        period={filters.period}
+        onPeriodChange={(period) => setFilters((prev) => ({ ...prev, period }))}
       />
 
       <Card>

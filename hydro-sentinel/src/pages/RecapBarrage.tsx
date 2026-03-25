@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { RecapBarrageChart, type RecapSeriesConfig } from "@/components/analysis/charts/RecapBarrageChart";
+import { RecapTable } from "@/components/analysis/RecapTable";
 import { CompactFilterBar, defaultCompactFilters, type CompactFilters } from "@/components/CompactFilterBar";
 import { useDams, useSources } from "@/hooks/useApi";
 import { CriticalityBadge } from "@/components/CriticalityBadge";
@@ -545,6 +546,13 @@ export default function RecapBarrage() {
 
         <CompactFilterBar filters={filters} onChange={setFilters} hideSources />
       </div>
+
+      <RecapTable
+        barrageId={selectedDamId}
+        barrageName={dam?.name ?? "-"}
+        periode={filters.period}
+        dateFin={dateRange.end.slice(0, 10)}
+      />
 
       {continuityAvailable && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/20 p-2">

@@ -1,6 +1,6 @@
 ﻿# Documentation HydroSentinel - Index Global
 
-Date de mise a jour: 2026-03-14
+Date de mise a jour: 2026-03-25
 
 ## Objectif
 
@@ -38,4 +38,10 @@ Les doublons/legacy sont deplaces (pas perdus) dans le dossier racine:
 4. Partie 5
 5. Partie 6
 6. Synthese docs
+
+## Addendum recent (implementation)
+
+- `Partie_2_Conception Technique/Addendum_Implementation_2026-03-25.md`
+  - Journal des updates fonctionnelles/UI/API/SQL implementees entre le 2026-03-23 et le 2026-03-25.
+  - Couvre notamment ABH/DGM (shapes), Precipitations, Scan de donnees, Gestion des Donnees, Recapitulatif barrage.
 

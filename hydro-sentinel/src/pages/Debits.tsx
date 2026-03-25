@@ -195,6 +195,8 @@ export default function Debits() {
         <CompactFilterBar
           filters={filters}
           onChange={setFilters}
+          hideSources
+          hidePeriod
           allowedSourceCodes={allowedSourceCodes}
           sourceLabelOverrides={sourceLabelOverrides}
         />
@@ -205,6 +207,8 @@ export default function Debits() {
         availableVariables={availableVariables}
         availableSources={availableSources}
         defaultVariable="flow_m3s"
+        period={filters.period}
+        onPeriodChange={(period) => setFilters((prev) => ({ ...prev, period }))}
       />
 
       <Card>
