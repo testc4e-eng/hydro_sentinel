@@ -38,7 +38,7 @@ export function VolumeFlowChart({ data, title = "Débit Horaire", variableName =
         <ResponsiveContainer width="100%" height="100%">
             <LineChart
                 data={data}
-                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                margin={{ top: 20, right: 32, left: 20, bottom: 24 }}
             >
                 <CartesianGrid strokeDasharray="3 3" vertical={true} horizontal={true} />
                 <XAxis 
@@ -55,6 +55,7 @@ export function VolumeFlowChart({ data, title = "Débit Horaire", variableName =
                     textAnchor="end"
                     height={100}
                     tick={{ fontSize: 10 }}
+                    padding={{ left: 12, right: 28 }}
                 />
                 <YAxis 
                     scale={logScale ? 'log' : 'auto'}

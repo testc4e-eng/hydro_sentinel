@@ -129,9 +129,9 @@ export function MultiSourceChart({
 
     return (
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={mergedData}>
+        <LineChart data={mergedData} margin={{ top: 10, right: 32, left: 16, bottom: 24 }}>
           <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="time" tick={{ fontSize: 10 }} />
+          <XAxis dataKey="time" tick={{ fontSize: 10 }} padding={{ left: 12, right: 28 }} />
           <YAxis tick={{ fontSize: 10 }} />
           <Tooltip />
           <Legend />
@@ -172,9 +172,9 @@ export function MultiSourceChart({
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={points}>
+                <LineChart data={points} margin={{ top: 10, right: 32, left: 16, bottom: 24 }}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="time" tick={{ fontSize: 10 }} />
+                  <XAxis dataKey="time" tick={{ fontSize: 10 }} padding={{ left: 12, right: 28 }} />
                   <YAxis tick={{ fontSize: 10 }} />
                   <Tooltip />
                   <Line

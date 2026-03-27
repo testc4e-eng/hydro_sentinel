@@ -677,6 +677,154 @@ async def scan_data_availability(
     }
 
 
+@router.get("/data-availability/basins/apports-recap")
+async def basins_apports_recap(
+    shape: str = "ABH",
+    source: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Recap des apports base sur flow_m3s:
+    - apport_horaire_mm3 = flow_m3s * 3600 / 1_000_000
+    - apport_journalier_mm3 = somme des apports horaires du dernier jour disponible
+    - cumul_apport_mm3 = somme cumulative sur toute la serie disponible
+    """
+    normalized_shape = (shape or "ABH").strip().upper()
+    if normalized_shape not in {"ABH", "DGM"}:
+        raise HTTPException(status_code=400, detail="shape must be ABH or DGM")
+
+    normalized_source = (source or "").strip().upper() or None
+
+    shape_condition = (
+        "COALESCE(b.code, '') ~* '^dgm[-_ ]*'"
+        if normalized_shape == "DGM"
+        else "COALESCE(b.code, '') !~* '^dgm[-_ ]*'"
+    )
+
+    source_filter_sql = ""
+    params: Dict[str, Any] = {}
+    if normalized_source:
+        source_filter_sql = "AND src.code = :source_code"
+        params["source_code"] = normalized_source
+
+    query = text(
+        f"""
+        WITH flow_raw AS (
+            SELECT
+                bm.basin_id::text AS basin_id,
+                COALESCE(NULLIF(TRIM(b.name), ''), bm.basin_id::text) AS basin_name,
+                NULLIF(TRIM(b.code::text), '') AS basin_code,
+                bm.time AS time,
+                src.code AS source_code,
+                bm.value::double precision AS flow_m3s,
+                CASE
+                    WHEN src.code = 'SIM' THEN 1
+                    WHEN src.code = 'AROME' THEN 2
+                    WHEN src.code = 'ECMWF' THEN 3
+                    WHEN src.code = 'OBS' THEN 4
+                    ELSE 99
+                END AS source_rank
+            FROM ts.basin_measurement bm
+            JOIN geo.basin b ON b.basin_id = bm.basin_id
+            JOIN ref.variable v ON v.variable_id = bm.variable_id
+            JOIN ref.source src ON src.source_id = bm.source_id
+            WHERE v.code = 'flow_m3s'
+              AND {shape_condition}
+              {source_filter_sql}
+        ),
+        flow_dedup AS (
+            SELECT basin_id, basin_name, basin_code, time, flow_m3s
+            FROM (
+                SELECT
+                    fr.*,
+                    row_number() OVER (
+                        PARTITION BY fr.basin_id, fr.time
+                        ORDER BY fr.source_rank
+                    ) AS rn
+                FROM flow_raw fr
+            ) ranked
+            WHERE ranked.rn = 1
+        ),
+        per_row AS (
+            SELECT
+                fd.basin_id,
+                fd.basin_name,
+                fd.basin_code,
+                fd.time,
+                date_trunc('day', fd.time)::date AS jour,
+                (fd.flow_m3s * 3600.0 / 1000000.0) AS apport_horaire_mm3
+            FROM flow_dedup fd
+        ),
+        latest_day AS (
+            SELECT basin_id, MAX(jour) AS latest_jour
+            FROM per_row
+            GROUP BY basin_id
+        ),
+        latest_point AS (
+            SELECT DISTINCT ON (pr.basin_id)
+                pr.basin_id,
+                pr.apport_horaire_mm3 AS dernier_apport_horaire_mm3,
+                pr.time AS dernier_timestamp
+            FROM per_row pr
+            ORDER BY pr.basin_id, pr.time DESC
+        ),
+        cumuls AS (
+            SELECT
+                pr.basin_id,
+                SUM(pr.apport_horaire_mm3) AS cumul_apport_mm3
+            FROM per_row pr
+            GROUP BY pr.basin_id
+        ),
+        journaliers AS (
+            SELECT
+                pr.basin_id,
+                SUM(pr.apport_horaire_mm3) AS apport_journalier_mm3
+            FROM per_row pr
+            JOIN latest_day ld
+              ON ld.basin_id = pr.basin_id
+             AND ld.latest_jour = pr.jour
+            GROUP BY pr.basin_id
+        )
+        SELECT
+            p.basin_id,
+            MIN(p.basin_name) AS basin_name,
+            MIN(p.basin_code) AS basin_code,
+            j.apport_journalier_mm3,
+            c.cumul_apport_mm3,
+            lp.dernier_apport_horaire_mm3,
+            lp.dernier_timestamp
+        FROM per_row p
+        JOIN journaliers j ON j.basin_id = p.basin_id
+        JOIN cumuls c ON c.basin_id = p.basin_id
+        JOIN latest_point lp ON lp.basin_id = p.basin_id
+        GROUP BY p.basin_id, j.apport_journalier_mm3, c.cumul_apport_mm3, lp.dernier_apport_horaire_mm3, lp.dernier_timestamp
+        ORDER BY MIN(p.basin_name) ASC
+        """
+    )
+
+    try:
+        rows = (await db.execute(query, params)).mappings().all()
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=500, detail=f"Erreur SQL: {type(exc).__name__} - {str(exc)}") from exc
+
+    return {
+        "shape": normalized_shape,
+        "source": normalized_source or "AUTO",
+        "rows": [
+            {
+                "basin_id": row["basin_id"],
+                "basin_name": row["basin_name"],
+                "basin_code": row["basin_code"],
+                "apport_journalier_mm3": row["apport_journalier_mm3"],
+                "cumul_apport_mm3": row["cumul_apport_mm3"],
+                "dernier_apport_horaire_mm3": row["dernier_apport_horaire_mm3"],
+                "dernier_timestamp": row["dernier_timestamp"].isoformat() if row["dernier_timestamp"] else None,
+            }
+            for row in rows
+        ],
+    }
+
+
 @router.get("/stations-with-data")
 async def get_stations_with_data(
     variable_code: Optional[str] = None,

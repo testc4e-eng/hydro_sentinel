@@ -10,6 +10,7 @@ import { api } from '@/lib/api';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Layers, Settings2 } from 'lucide-react';
+import { useAlertsStore } from '@/store/alertsStore';
 
 interface StationKpiRow {
   station_id: string;
@@ -33,6 +34,7 @@ function isAlertSeverity(severity?: string): boolean {
 
 export default function Dashboard() {
   const { selectedBasinId, mapDisplayMode } = useDashboardStore();
+  const setActiveAlertsCount = useAlertsStore((state) => state.setActiveAlertsCount);
   const [selections, setSelections] = useState<CompactVariableSelection[]>([]);
   const [stationsKpi, setStationsKpi] = useState<StationKpiRow[]>([]);
   const [filterType, setFilterType] = useState<'all' | 'Barrage' | 'Poste Pluviometrique' | 'Station hydrologique' | 'point resultats'>('all');
@@ -104,6 +106,7 @@ export default function Dashboard() {
         const alerts = critical.filter((item: any) => isAlertSeverity(item.severity)).length;
         const avgPrecip = stations.reduce((sum: number, s: any) => sum + (s.precip_cum_24h_mm || 0), 0) / (stations.length || 1);
         const maxDebit = Math.max(...stations.map((s: any) => s.debit_obs_m3s || 0));
+        setActiveAlertsCount(alerts);
 
         setKpiData({
           totalStations: stations.length,
@@ -113,7 +116,7 @@ export default function Dashboard() {
         });
       })
       .catch((err) => console.error('Failed to fetch KPI data:', err));
-  }, []);
+  }, [setActiveAlertsCount]);
 
   useEffect(() => {
     if (!selectedBasinId) {

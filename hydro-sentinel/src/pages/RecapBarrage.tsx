@@ -37,12 +37,13 @@ interface SlotFetchResult {
 }
 
 interface CoverageInfo {
-  mode: "common" | "union" | "requested" | "none";
+  mode: "common" | "union" | "requested" | "full" | "none";
   from?: string;
   to?: string;
 }
 
 const OBS_CODE = "OBS";
+const DEFAULT_SOURCE_CODE = "SIM";
 const SIM_CANDIDATE_CODES = ["SIM", "HEC_HMS"];
 
 const VARIABLE_OPTIONS: VariableDef[] = [
@@ -56,7 +57,7 @@ const DEFAULT_SERIES: SeriesSlot[] = [
   {
     id: "s1",
     variableCode: "lacher_m3s",
-    sourceCode: OBS_CODE,
+    sourceCode: DEFAULT_SOURCE_CODE,
     axis: "right",
     type: "bar",
     color: "#6b7280",
@@ -64,7 +65,7 @@ const DEFAULT_SERIES: SeriesSlot[] = [
   {
     id: "s2",
     variableCode: "inflow_m3s",
-    sourceCode: OBS_CODE,
+    sourceCode: DEFAULT_SOURCE_CODE,
     axis: "right",
     type: "line",
     color: "#3b82f6",
@@ -72,7 +73,7 @@ const DEFAULT_SERIES: SeriesSlot[] = [
   {
     id: "s3",
     variableCode: "volume_hm3",
-    sourceCode: OBS_CODE,
+    sourceCode: DEFAULT_SOURCE_CODE,
     axis: "left",
     type: "line",
     color: "#ea580c",
@@ -80,7 +81,7 @@ const DEFAULT_SERIES: SeriesSlot[] = [
   {
     id: "s4",
     variableCode: "flow_m3s",
-    sourceCode: OBS_CODE,
+    sourceCode: DEFAULT_SOURCE_CODE,
     axis: "right",
     type: "line",
     color: "#22c55e",
@@ -106,19 +107,14 @@ function isoToDay(isoValue?: string): string | undefined {
   return parsed.toISOString().slice(0, 10);
 }
 
-function enumerateDays(startDay?: string, endDay?: string): string[] {
-  if (!startDay || !endDay || startDay > endDay) return [];
+function dayToIsoStart(day?: string): string | undefined {
+  if (!day) return undefined;
+  return `${day}T00:00:00.000Z`;
+}
 
-  const out: string[] = [];
-  const cursor = new Date(`${startDay}T00:00:00.000Z`);
-  const end = new Date(`${endDay}T00:00:00.000Z`);
-
-  while (cursor <= end) {
-    out.push(cursor.toISOString().slice(0, 10));
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
-  }
-
-  return out;
+function dayToIsoEnd(day?: string): string | undefined {
+  if (!day) return undefined;
+  return `${day}T23:59:59.999Z`;
 }
 
 export default function RecapBarrage() {
@@ -129,7 +125,7 @@ export default function RecapBarrage() {
   const [coverageInfo, setCoverageInfo] = useState<CoverageInfo>({ mode: "none" });
   const [seriesDiag, setSeriesDiag] = useState<Record<string, { points: number; usedSource: string }>>({});
   const [continuityEnabled, setContinuityEnabled] = useState(false);
-  const [continuityOrder, setContinuityOrder] = useState<string[]>([OBS_CODE]);
+  const [continuityOrder, setContinuityOrder] = useState<string[]>([DEFAULT_SOURCE_CODE]);
 
   const { data: damsResult } = useDams();
   const { data: sourcesResult } = useSources();
@@ -148,9 +144,9 @@ export default function RecapBarrage() {
   }, [rawSources]);
 
   const sourceOptions = useMemo(() => {
-    const result = [{ code: OBS_CODE, label: "Observe" }];
-    if (!result.some((s) => s.code === simulatedSourceCode)) {
-      result.push({ code: simulatedSourceCode, label: "Simule" });
+    const result = [{ code: simulatedSourceCode, label: "Simule" }];
+    if (!result.some((s) => s.code === OBS_CODE)) {
+      result.push({ code: OBS_CODE, label: "Observe" });
     }
     return result;
   }, [simulatedSourceCode]);
@@ -183,7 +179,7 @@ export default function RecapBarrage() {
         const valid = sourceOptions.some((s) => s.code === slot.sourceCode);
         if (valid) return slot;
         changed = true;
-        return { ...slot, sourceCode: sourceOptions[0]?.code ?? OBS_CODE };
+        return { ...slot, sourceCode: sourceOptions[0]?.code ?? DEFAULT_SOURCE_CODE };
       });
       return changed ? next : prev;
     });
@@ -308,15 +304,18 @@ export default function RecapBarrage() {
     return keepAvailable([selected]);
   };
 
-  const fetchSlotRows = async (slot: SeriesSlot): Promise<SlotFetchResult> => {
+  const fetchSlotRows = async (
+    slot: SeriesSlot,
+    effectiveRange: { start?: string; end?: string },
+  ): Promise<SlotFetchResult> => {
     const requestRows = async (sourceCode: string) => {
       const response = await api.get("/measurements/timeseries", {
         params: {
           station_id: selectedDamId,
           variable_code: slot.variableCode,
           source_code: sourceCode,
-          start: dateRange.start,
-          end: dateRange.end,
+          start: effectiveRange.start,
+          end: effectiveRange.end,
         },
       });
       return Array.isArray(response.data) ? response.data : [];
@@ -376,34 +375,47 @@ export default function RecapBarrage() {
       setErrorMessage(null);
 
       try {
-        const responses = await Promise.all(activeSlots.map((slot) => fetchSlotRows(slot)));
+        let effectiveRange = { start: dateRange.start, end: dateRange.end };
+        let rangeMode: CoverageInfo["mode"] = "requested";
+        try {
+          const periodResponse = await api.get("/recap/barrage", {
+            params: {
+              barrage_id: selectedDamId,
+              full_period: true,
+              source: "SIM",
+            },
+          });
+          const period = periodResponse?.data?.periode ?? {};
+          const fullStart = dayToIsoStart(period?.debut);
+          const fullEnd = dayToIsoEnd(period?.fin);
+          if (fullStart && fullEnd) {
+            effectiveRange = { start: fullStart, end: fullEnd };
+            rangeMode = "full";
+          }
+        } catch {
+          rangeMode = "requested";
+        }
+
+        const responses = await Promise.all(activeSlots.map((slot) => fetchSlotRows(slot, effectiveRange)));
 
         const diag: Record<string, { points: number; usedSource: string }> = {};
         responses.forEach((r) => {
           diag[r.slot.id] = { points: r.rows.length, usedSource: r.usedSource };
         });
 
-        const requestedStart = isoToDay(dateRange.start);
-        const requestedEnd = isoToDay(dateRange.end);
-        const rangeDays = enumerateDays(requestedStart, requestedEnd);
+        const requestedStart = isoToDay(effectiveRange.start);
+        const requestedEnd = isoToDay(effectiveRange.end);
         const nonEmpty = responses.filter((r) => r.rows.length > 0);
 
         if (nonEmpty.length === 0) {
           if (!cancelled) {
-            const emptyRows = rangeDays.map((day) => {
-              const out: any = { date: day };
-              activeSlots.forEach((slot) => {
-                out[slot.id] = null;
-              });
-              return out;
-            });
             setSeriesDiag(diag);
             setCoverageInfo(
               requestedStart && requestedEnd
-                ? { mode: "requested", from: requestedStart, to: requestedEnd }
+                ? { mode: rangeMode, from: requestedStart, to: requestedEnd }
                 : { mode: "none" },
             );
-            setChartData(emptyRows);
+            setChartData([]);
           }
           return;
         }
@@ -413,7 +425,7 @@ export default function RecapBarrage() {
           .sort();
         const coverageStart = requestedStart ?? fallbackRangeDays[0] ?? "";
         const coverageEnd = requestedEnd ?? fallbackRangeDays[fallbackRangeDays.length - 1] ?? "";
-        const coverageMode: CoverageInfo["mode"] = requestedStart && requestedEnd ? "requested" : "union";
+        const coverageMode: CoverageInfo["mode"] = requestedStart && requestedEnd ? rangeMode : "union";
 
         const dayMap = new Map<string, any>();
 
@@ -466,24 +478,10 @@ export default function RecapBarrage() {
             return out;
           });
 
-        const coverageDays = rangeDays.length > 0 ? rangeDays : enumerateDays(coverageStart, coverageEnd);
-        const mergedByDay = new Map(merged.map((row) => [row.date, row]));
-        const padded = coverageDays.length > 0
-          ? coverageDays.map((day) => {
-              const existing = mergedByDay.get(day);
-              if (existing) return existing;
-              const out: any = { date: day };
-              activeSlots.forEach((slot) => {
-                out[slot.id] = null;
-              });
-              return out;
-            })
-          : merged;
-
         if (!cancelled) {
           setSeriesDiag(diag);
           setCoverageInfo({ mode: coverageMode, from: coverageStart, to: coverageEnd });
-          setChartData(padded);
+          setChartData(merged);
         }
       } catch (error) {
         if (!cancelled) {
@@ -550,8 +548,6 @@ export default function RecapBarrage() {
       <RecapTable
         barrageId={selectedDamId}
         barrageName={dam?.name ?? "-"}
-        periode={filters.period}
-        dateFin={dateRange.end.slice(0, 10)}
       />
 
       {continuityAvailable && (
@@ -680,6 +676,8 @@ export default function RecapBarrage() {
                   ? "commune"
                   : coverageInfo.mode === "union"
                     ? "union"
+                    : coverageInfo.mode === "full"
+                      ? "periode complete disponible (SIM)"
                     : coverageInfo.mode === "requested"
                       ? "periode demandee"
                       : "n/a"}

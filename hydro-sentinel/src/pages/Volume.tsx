@@ -28,8 +28,11 @@ export default function Volume() {
       : [];
 
   const simulatedSourceCode = useMemo(() => {
-    const found = rawSources.find((s: any) => SIM_CANDIDATE_CODES.includes(s.code));
-    return found?.code ?? "SIM";
+    for (const candidate of SIM_CANDIDATE_CODES) {
+      const found = rawSources.find((s: any) => s.code === candidate);
+      if (found?.code) return found.code;
+    }
+    return "SIM";
   }, [rawSources]);
 
   const allowedSourceCodes = useMemo(() => [OBS_CODE, simulatedSourceCode], [simulatedSourceCode]);
@@ -70,12 +73,17 @@ export default function Volume() {
 
   useEffect(() => {
     api
-      .get("/map/points-kpi")
+      .get("/admin/stations-with-data", {
+        params: {
+          variable_code: "volume_hm3",
+          source_code: OBS_CODE,
+        },
+      })
       .then((res) => {
         const rows = Array.isArray(res.data) ? res.data : [];
         const ids = rows
-          .filter((r: any) => r.volume_hm3_latest !== null && r.volume_hm3_latest !== undefined)
-          .map((r: any) => String(r.station_id));
+          .map((r: any) => String(r.id ?? r.station_id))
+          .filter((id: string) => !!id);
         setStationsWithObsVolume(new Set(ids));
       })
       .catch((err) => console.error("Failed to load volume coverage", err));

@@ -16,6 +16,7 @@ import csv
 import io
 import re
 from datetime import datetime, timedelta
+from pathlib import Path
 
 
 
@@ -287,6 +288,7 @@ TEMPLATE_SOURCE_LABELS = {
     "ECMWF": "Prevision ECMWF",
     "SIM": "Simule",
 }
+BASIN_SHAPE_ALLOWED = {"ABH", "DGM"}
 
 
 def _normalize_template_source_code(source_code: Optional[str]) -> str:
@@ -316,6 +318,56 @@ def _normalize_template_source_codes(source_codes: Optional[str]) -> List[str]:
             normalized_codes.append(part)
 
     return normalized_codes or ["OBS"]
+
+
+def _normalize_basin_shape(shape: Optional[str]) -> str:
+    normalized = (shape or "ABH").strip().upper()
+    if normalized not in BASIN_SHAPE_ALLOWED:
+        allowed = ", ".join(sorted(BASIN_SHAPE_ALLOWED))
+        raise HTTPException(status_code=400, detail=f"Invalid basin_shape: {normalized}. Allowed: {allowed}")
+    return normalized
+
+
+def _load_dgm_basins_from_geojson() -> List[Dict[str, str]]:
+    # Try common project locations for local DGM GeoJSON.
+    root = Path(__file__).resolve().parents[5]
+    candidates = [
+        root / "hydro-sentinel" / "public" / "data" / "basins_dgm.geojson",
+        root / "public" / "data" / "basins_dgm.geojson",
+    ]
+    for path in candidates:
+        if not path.exists():
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            features = payload.get("features") if isinstance(payload, dict) else []
+            if not isinstance(features, list):
+                continue
+            entities: List[Dict[str, str]] = []
+            for idx, feature in enumerate(features):
+                props = feature.get("properties", {}) if isinstance(feature, dict) else {}
+                name = (
+                    props.get("name")
+                    or props.get("nom")
+                    or props.get("NOM")
+                    or props.get("Name")
+                    or props.get("Name1")
+                    or props.get("BASSIN")
+                    or f"Bassin DGM {idx + 1}"
+                )
+                code = props.get("code") or props.get("CODE") or props.get("Code") or props.get("id") or props.get("ID")
+                entities.append(
+                    {
+                        "entity_id": f"dgm-{idx + 1}",
+                        "name": str(name),
+                        "code": str(code) if code is not None else f"DGM-{idx + 1}",
+                    }
+                )
+            if entities:
+                return entities
+        except Exception:
+            continue
+    return []
 
 
 def _source_suffix(source_code: str) -> str:
@@ -771,6 +823,7 @@ async def get_template_multi_station(
     variable_code: Optional[str] = Query(None),
     entity_type: str = Query("stations"),
     source_code: Optional[str] = Query("OBS"),
+    basin_shape: Optional[str] = Query("ABH"),
     db: AsyncSession = Depends(get_db)
 ):
     """Generate Excel template with columns = stations or bassins (for one variable)."""
@@ -781,6 +834,7 @@ async def get_template_multi_station(
 
     normalized_source = _normalize_template_source_code(source_code)
     source_label = TEMPLATE_SOURCE_LABELS.get(normalized_source, normalized_source)
+    normalized_basin_shape = _normalize_basin_shape(basin_shape)
 
     normalized_entity_type = (entity_type or "stations").lower()
     if normalized_entity_type == "basins":
@@ -813,14 +867,67 @@ async def get_template_multi_station(
     entities = []
     try:
         if is_basin_template:
-            res = await db.execute(text("SELECT basin_id AS entity_id, name, code FROM geo.basin ORDER BY name"))
-            entities = [dict(r) for r in res.mappings().all()]
+            provider_column_check = await db.execute(
+                text(
+                    """
+                    SELECT 1
+                    FROM information_schema.columns
+                    WHERE table_schema = 'geo'
+                      AND table_name = 'basin'
+                      AND column_name = 'provider'
+                    LIMIT 1
+                    """
+                )
+            )
+            provider_column_exists = provider_column_check.first() is not None
+
+            if normalized_basin_shape == "DGM":
+                # Always prefer local DGM shape file to guarantee expected basin naming.
+                entities = _load_dgm_basins_from_geojson()
+
+                # Fallback 1: provider-filtered DB rows (if provider column exists).
+                if not entities and provider_column_exists:
+                    res = await db.execute(
+                        text(
+                            """
+                            SELECT basin_id AS entity_id, name, code
+                            FROM geo.basin
+                            WHERE UPPER(COALESCE(provider, 'ABH')) = 'DGM'
+                            ORDER BY name
+                            """
+                        )
+                    )
+                    entities = [dict(r) for r in res.mappings().all()]
+
+                # Fallback 2: generic DB list (last resort).
+                if not entities:
+                    res = await db.execute(text("SELECT basin_id AS entity_id, name, code FROM geo.basin ORDER BY name"))
+                    entities = [dict(r) for r in res.mappings().all()]
+            else:
+                if provider_column_exists:
+                    res = await db.execute(
+                        text(
+                            """
+                            SELECT basin_id AS entity_id, name, code
+                            FROM geo.basin
+                            WHERE UPPER(COALESCE(provider, 'ABH')) = 'ABH'
+                            ORDER BY name
+                            """
+                        )
+                    )
+                    entities = [dict(r) for r in res.mappings().all()]
+                else:
+                    res = await db.execute(text("SELECT basin_id AS entity_id, name, code FROM geo.basin ORDER BY name"))
+                    entities = [dict(r) for r in res.mappings().all()]
         else:
             res = await db.execute(text("SELECT station_id AS entity_id, name, code FROM geo.station ORDER BY name"))
             entities = [dict(r) for r in res.mappings().all()]
     except:
         if is_basin_template:
-            entities = [{"entity_id": "xxx", "name": "Bassin 1", "code": "B1"}]
+            if normalized_basin_shape == "DGM":
+                entities = _load_dgm_basins_from_geojson()
+            if not entities:
+                entities = [{"entity_id": "xxx", "name": "Bassin 1", "code": "B1"}]
         else:
             entities = [{"entity_id": "xxx", "name": "Station 1", "code": "S1"}]
 
@@ -834,7 +941,8 @@ async def get_template_multi_station(
     info_fill = PatternFill(start_color="E8F4FD", end_color="E8F4FD", fill_type="solid")
 
     # Info row
-    ws["A1"] = f"Variable: {variable_label} ({variable_unit}) | Source: {source_label} ({normalized_source})"
+    shape_info = f" | Shape: {normalized_basin_shape}" if is_basin_template else ""
+    ws["A1"] = f"Variable: {variable_label} ({variable_unit}) | Source: {source_label} ({normalized_source}){shape_info}"
     ws["A1"].font = Font(bold=True, size=12)
     ws["A1"].fill = info_fill
     ws.merge_cells(f"A1:{get_column_letter(len(entities) + 1)}1")
@@ -887,7 +995,8 @@ async def get_template_multi_station(
     wb.save(output)
     output.seek(0)
 
-    filename = f"template_multi_{entity_label_plural}_{variable_code or 'variable'}_{normalized_source.lower()}.xlsx"
+    shape_suffix = f"_{normalized_basin_shape.lower()}" if is_basin_template else ""
+    filename = f"template_multi_{entity_label_plural}{shape_suffix}_{variable_code or 'variable'}_{normalized_source.lower()}.xlsx"
     return StreamingResponse(
         output,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -899,6 +1008,7 @@ async def get_template_multi_station(
 async def get_template_multi_bassin(
     variable_code: Optional[str] = Query(None),
     source_code: Optional[str] = Query("OBS"),
+    basin_shape: Optional[str] = Query("ABH"),
     db: AsyncSession = Depends(get_db)
 ):
     """Generate Excel template with columns = bassins (for one variable)."""
@@ -906,6 +1016,7 @@ async def get_template_multi_bassin(
         variable_code=variable_code,
         entity_type="bassins",
         source_code=source_code,
+        basin_shape=basin_shape,
         db=db,
     )
 

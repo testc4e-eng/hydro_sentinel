@@ -9,6 +9,7 @@ import {
   Plug,
   ScanSearch,
   Settings,
+  Siren,
   Upload,
   Waves,
 } from "lucide-react";
@@ -68,6 +69,11 @@ const navItems: NavItem[] = [
     title: "Recapitulatif",
     url: "/recap-barrage",
     icon: DbIcon,
+  },
+  {
+    title: "Alertes",
+    url: "/alertes",
+    icon: Siren,
   },
 ];
 

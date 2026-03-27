@@ -289,7 +289,7 @@ export function RecapBarrageChart({ data, damName, series, vn = 3522.2 }: RecapB
       <CardContent className="flex-1 p-0 pb-4">
         <div ref={chartWrapperRef} className="h-full w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={safeData} margin={{ top: 16, right: 24, left: 8, bottom: 36 }}>
+            <ComposedChart data={safeData} margin={{ top: 16, right: 32, left: 16, bottom: 44 }}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis
               dataKey="date"
@@ -298,6 +298,7 @@ export function RecapBarrageChart({ data, damName, series, vn = 3522.2 }: RecapB
               textAnchor="end"
               height={100}
               tick={{ fontSize: 10 }}
+              padding={{ left: 12, right: 28 }}
             />
 
             {hasLeft && (

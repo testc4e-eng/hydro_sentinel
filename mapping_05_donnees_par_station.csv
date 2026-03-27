@@ -1,0 +1,126 @@
+station;code_station;type_station;variable;source;nb_mesures;date_debut;date_fin
+Aguelmam Sidi Ali;1;Poste Pluviométrique;precip_mm;ECMWF;102;2026-02-25 17:00:00-08:00;2026-03-01 22:00:00-08:00
+Aguelmam Sidi Ali;1;Poste Pluviométrique;precip_mm;OBS;1515;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Ain Aicha;54;Station hydrologique;flow_m3s;OBS;564;2026-02-02 13:00:00-08:00;2026-02-26 00:00:00-08:00
+Ain Aicha;54;Station hydrologique;flow_m3s;SIM;1083;2026-02-02 13:00:00-08:00;2026-03-19 16:00:00-07:00
+Ain Aicha;54;Station hydrologique;precip_mm;ECMWF;360;2026-03-04 17:00:00-08:00;2026-03-19 17:00:00-07:00
+Ain Aicha;54;Station hydrologique;precip_mm;OBS;1527;2025-12-31 16:00:00-08:00;2026-03-05 06:00:00-08:00
+Ain El Ouali;51;Station hydrologique;flow_m3s;OBS;1614;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+Ain El Ouali;51;Station hydrologique;precip_mm;OBS;1515;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Ain Sebou;50;Station hydrologique;flow_m3s;OBS;1617;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+Ain Sebou;50;Station hydrologique;precip_mm;OBS;1487;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Ait Khabbach;2;Station hydrologique;flow_m3s;OBS;1620;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+Ait Khabbach;2;Station hydrologique;precip_mm;ECMWF;102;2026-02-25 17:00:00-08:00;2026-03-01 22:00:00-08:00
+Ait Khabbach;2;Station hydrologique;precip_mm;OBS;1521;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Azibe Soltane;4;Station hydrologique;flow_m3s;OBS;1620;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+Azibe Soltane;4;Station hydrologique;precip_mm;ECMWF;102;2026-02-25 17:00:00-08:00;2026-03-01 22:00:00-08:00
+Azibe Soltane;4;Station hydrologique;precip_mm;OBS;1523;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Azzaba;52;Station hydrologique;flow_m3s;OBS;1620;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+Azzaba;52;Station hydrologique;precip_mm;OBS;1523;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Bab Chhoub;5;Station hydrologique;flow_m3s;OBS;1620;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+Bab Chhoub;5;Station hydrologique;precip_mm;ECMWF;102;2026-02-25 17:00:00-08:00;2026-03-01 22:00:00-08:00
+Bab Chhoub;5;Station hydrologique;precip_mm;OBS;1522;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Bab Merzouka;6;Station hydrologique;flow_m3s;OBS;1613;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+Bab Merzouka;6;Station hydrologique;precip_mm;ECMWF;102;2026-02-25 17:00:00-08:00;2026-03-01 22:00:00-08:00
+Bab Merzouka;6;Station hydrologique;precip_mm;OBS;1514;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Bab Ouender;7;Station hydrologique;flow_m3s;OBS;1223;2025-12-14 16:00:00-08:00;2026-02-20 00:00:00-08:00
+Bab Ouender;7;Station hydrologique;precip_mm;ECMWF;102;2026-02-25 17:00:00-08:00;2026-03-01 22:00:00-08:00
+Bab Ouender;7;Station hydrologique;precip_mm;OBS;1269;2025-12-14 16:00:00-08:00;2026-02-16 01:00:00-08:00
+Bab Taza;8;Poste Pluviométrique;precip_mm;OBS;1522;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Belksiri;9;Station hydrologique;flow_m3s;OBS;1618;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+Belksiri;9;Station hydrologique;precip_mm;OBS;1519;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Bge Al Wahda;10;Barrage;flow_m3s;SIM;2184;2025-12-31 16:00:00-08:00;2026-04-01 16:00:00-07:00
+Bge Al Wahda;10;Barrage;inflow_m3s;SIM;2184;2025-12-31 16:00:00-08:00;2026-04-01 16:00:00-07:00
+Bge Al Wahda;10;Barrage;lacher_m3s;SIM;2184;2025-12-31 16:00:00-08:00;2026-04-01 16:00:00-07:00
+Bge Al Wahda;10;Barrage;precip_mm;OBS;1518;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Bge Al Wahda;10;Barrage;volume_hm3;OBS;1618;2025-12-14 16:00:00-08:00;2026-02-20 02:00:00-08:00
+Bge Al Wahda;10;Barrage;volume_hm3;SIM;2184;2025-12-31 16:00:00-08:00;2026-04-01 16:00:00-07:00
+Bge Allal Al Fassi;3;Barrage;precip_mm;ECMWF;102;2026-02-25 17:00:00-08:00;2026-03-01 22:00:00-08:00
+Bge Allal Al Fassi;3;Barrage;precip_mm;OBS;1521;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Bge Asfallou;11;Barrage;precip_mm;OBS;1488;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Bge Asfallou;11;Barrage;volume_hm3;OBS;1588;2025-12-14 16:00:00-08:00;2026-02-20 02:00:00-08:00
+Bge Bab Louta;12;Barrage;precip_mm;OBS;1139;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Bge Bab Louta;12;Barrage;volume_hm3;OBS;1291;2025-12-14 16:00:00-08:00;2026-02-20 02:00:00-08:00
+Bge Bouhouda;13;Barrage;precip_mm;OBS;1478;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Bge Bouhouda;13;Barrage;volume_hm3;OBS;1577;2025-12-14 16:00:00-08:00;2026-02-20 02:00:00-08:00
+Bge Garde de Sebou;14;Barrage;flow_m3s;OBS;306;2026-02-07 10:00:00-08:00;2026-02-20 03:00:00-08:00
+Bge Garde de Sebou;14;Barrage;precip_mm;OBS;1522;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Bge Garde de Sebou;14;Barrage;volume_hm3;OBS;1619;2025-12-14 16:00:00-08:00;2026-02-20 02:00:00-08:00
+Bge Idriss 1er;15;Barrage;flow_m3s;SIM;2184;2025-12-31 16:00:00-08:00;2026-04-01 16:00:00-07:00
+Bge Idriss 1er;15;Barrage;inflow_m3s;SIM;2184;2025-12-31 16:00:00-08:00;2026-04-01 16:00:00-07:00
+Bge Idriss 1er;15;Barrage;lacher_m3s;SIM;2184;2025-12-31 16:00:00-08:00;2026-04-01 16:00:00-07:00
+Bge Idriss 1er;15;Barrage;precip_mm;OBS;1506;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Bge Idriss 1er;15;Barrage;volume_hm3;OBS;1605;2025-12-14 16:00:00-08:00;2026-02-20 02:00:00-08:00
+Bge Idriss 1er;15;Barrage;volume_hm3;SIM;2184;2025-12-31 16:00:00-08:00;2026-04-01 16:00:00-07:00
+Bge Kansera;16;Barrage;precip_mm;OBS;1521;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Bge Kansera;16;Barrage;volume_hm3;OBS;1619;2025-12-14 16:00:00-08:00;2026-02-20 02:00:00-08:00
+BGE Michlifen;55;Barrage;precip_mm;OBS;1297;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Bge Ouljet Soltane;38;Barrage;flow_m3s;SIM;2184;2025-12-31 16:00:00-08:00;2026-04-01 16:00:00-07:00
+Bge Ouljet Soltane;38;Barrage;inflow_m3s;SIM;2184;2025-12-31 16:00:00-08:00;2026-04-01 16:00:00-07:00
+Bge Ouljet Soltane;38;Barrage;lacher_m3s;SIM;2184;2025-12-31 16:00:00-08:00;2026-04-01 16:00:00-07:00
+Bge Ouljet Soltane;38;Barrage;precip_mm;OBS;1490;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Bge Ouljet Soltane;38;Barrage;volume_hm3;OBS;1590;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+Bge Ouljet Soltane;38;Barrage;volume_hm3;SIM;2184;2025-12-31 16:00:00-08:00;2026-04-01 16:00:00-07:00
+Bge Sahla;17;Barrage;precip_mm;OBS;1479;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Bge Sahla;17;Barrage;volume_hm3;OBS;1580;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+Bge Sidi Chahed;18;Barrage;precip_mm;OBS;1523;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Bge Sidi Chahed;18;Barrage;volume_hm3;OBS;1620;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+Bni Haitem;19;Station hydrologique;flow_m3s;OBS;1620;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+Bni Haitem;19;Station hydrologique;precip_mm;OBS;1523;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Boufellou;20;Station hydrologique;flow_m3s;OBS;1577;2025-12-14 16:00:00-08:00;2026-02-20 02:00:00-08:00
+Boufellou;20;Station hydrologique;precip_mm;OBS;1403;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Boured;21;Station hydrologique;flow_m3s;OBS;1620;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+Boured;21;Station hydrologique;precip_mm;OBS;1522;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+BRG ETTINE;58;Barrage;precip_mm;OBS;1520;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+BRG ETTINE;58;Barrage;volume_hm3;OBS;1619;2025-12-14 16:00:00-08:00;2026-02-20 02:00:00-08:00
+BRG MAKRACH;61;Barrage;precip_mm;OBS;1517;2025-12-14 16:00:00-08:00;2026-02-16 01:00:00-08:00
+BRG MAKRACH;61;Barrage;volume_hm3;OBS;1616;2025-12-14 16:00:00-08:00;2026-02-20 00:00:00-08:00
+BRG SEHB ELMARGA;59;Barrage;precip_mm;OBS;1162;2025-12-14 16:00:00-08:00;2026-02-04 15:00:00-08:00
+Dar El Arsa;49;Station hydrologique;flow_m3s;OBS;1607;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+Dar El Arsa;49;Station hydrologique;precip_mm;OBS;1509;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Dar El Hamra;22;Station hydrologique;flow_m3s;OBS;1546;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+Dar El Hamra;22;Station hydrologique;precip_mm;OBS;1478;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Dar Salem;23;Station hydrologique;flow_m3s;OBS;1620;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+Dar Salem;23;Station hydrologique;precip_mm;OBS;1520;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+El Hammam;24;Station hydrologique;flow_m3s;OBS;1620;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+El Hammam;24;Station hydrologique;precip_mm;OBS;1520;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+El Malha;25;Station hydrologique;flow_m3s;OBS;1590;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+El Malha;25;Station hydrologique;precip_mm;OBS;1487;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+El Mers;26;Station hydrologique;flow_m3s;OBS;1620;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+El Mers;26;Station hydrologique;precip_mm;OBS;1522;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Fes(ABHS);27;Poste Pluviométrique;precip_mm;OBS;1522;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Galaz;28;Station hydrologique;flow_m3s;OBS;1355;2025-12-14 16:00:00-08:00;2026-02-17 08:00:00-08:00
+Galaz;28;Station hydrologique;precip_mm;OBS;1100;2025-12-14 16:00:00-08:00;2026-02-13 04:00:00-08:00
+Had Kourt;29;Station hydrologique;flow_m3s;OBS;1620;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+Had Kourt;29;Station hydrologique;precip_mm;OBS;1523;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Hajria;30;Station hydrologique;flow_m3s;OBS;1620;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+Hajria;30;Station hydrologique;precip_mm;OBS;1523;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Jbel Outka;31;Poste Pluviométrique;precip_mm;OBS;1481;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Jorf El Malha;32;Station hydrologique;flow_m3s;OBS;1620;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+Jorf El Malha;32;Station hydrologique;precip_mm;OBS;1522;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Kharrouba;41;Station hydrologique;flow_m3s;OBS;1612;2025-12-14 16:00:00-08:00;2026-02-20 01:00:00-08:00
+Kharrouba;41;Station hydrologique;precip_mm;OBS;1487;2025-12-14 16:00:00-08:00;2026-02-16 01:00:00-08:00
+Lalla Mimouna;34;Station hydrologique;flow_m3s;OBS;1620;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+Lalla Mimouna;34;Station hydrologique;precip_mm;OBS;1522;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+My Ali Cherif;35;Station hydrologique;flow_m3s;OBS;1620;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+My Ali Cherif;35;Station hydrologique;precip_mm;OBS;1523;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Oued ifrane;36;Station hydrologique;flow_m3s;OBS;1620;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+Oued ifrane;36;Station hydrologique;precip_mm;OBS;1521;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+POMPAGE EST 2;62;Poste Pluviométrique;precip_mm;OBS;1523;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Pont Ait Aissa;39;Station hydrologique;flow_m3s;OBS;1619;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+Pont Ait Aissa;39;Station hydrologique;precip_mm;OBS;1514;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Ratba;42;Station hydrologique;flow_m3s;OBS;1068;2025-12-14 16:00:00-08:00;2026-02-20 01:00:00-08:00
+Ratba;42;Station hydrologique;precip_mm;OBS;965;2025-12-14 16:00:00-08:00;2026-02-03 10:00:00-08:00
+Route 26;43;Station hydrologique;precip_mm;OBS;1519;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Souk El Had;44;Station hydrologique;flow_m3s;OBS;1620;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+Souk El Had;44;Station hydrologique;precip_mm;OBS;1521;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Tabouda;45;Station hydrologique;flow_m3s;OBS;1444;2025-12-14 16:00:00-08:00;2026-02-20 02:00:00-08:00
+Tabouda;45;Station hydrologique;precip_mm;OBS;1328;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Taghrout;53;Station hydrologique;flow_m3s;OBS;1620;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+Taghrout;53;Station hydrologique;precip_mm;OBS;1510;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Taghzout;46;Station hydrologique;flow_m3s;OBS;1602;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+Taghzout;46;Station hydrologique;precip_mm;OBS;1502;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Tissa;47;Station hydrologique;flow_m3s;OBS;1619;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+Tissa;47;Station hydrologique;precip_mm;OBS;1519;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00
+Zrarda;48;Station hydrologique;flow_m3s;OBS;1619;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00
+Zrarda;48;Station hydrologique;precip_mm;OBS;1490;2025-12-14 16:00:00-08:00;2026-02-16 02:00:00-08:00

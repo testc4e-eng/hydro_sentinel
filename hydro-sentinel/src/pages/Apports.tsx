@@ -23,8 +23,11 @@ export default function Apports() {
   const rawSources = sourcesResult?.data?.data ?? [];
 
   const simulatedSourceCode = useMemo(() => {
-    const found = rawSources.find((s: any) => SIM_CANDIDATE_CODES.includes(s.code));
-    return found?.code ?? "SIM";
+    for (const candidate of SIM_CANDIDATE_CODES) {
+      const found = rawSources.find((s: any) => s.code === candidate);
+      if (found?.code) return found.code;
+    }
+    return "SIM";
   }, [rawSources]);
 
   const allowedSourceCodes = useMemo(() => [OBS_CODE, simulatedSourceCode], [simulatedSourceCode]);

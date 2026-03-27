@@ -1,0 +1,154 @@
+schema;table_ou_vue;type;nb_colonnes
+_timescaledb_cache;cache_inval_bgw_job;BASE TABLE;0
+_timescaledb_cache;cache_inval_extension;BASE TABLE;0
+_timescaledb_cache;cache_inval_hypertable;BASE TABLE;0
+_timescaledb_catalog;chunk;BASE TABLE;9
+_timescaledb_catalog;chunk_column_stats;BASE TABLE;7
+_timescaledb_catalog;chunk_constraint;BASE TABLE;4
+_timescaledb_catalog;chunk_rewrite;BASE TABLE;2
+_timescaledb_catalog;compression_algorithm;BASE TABLE;4
+_timescaledb_catalog;compression_chunk_size;BASE TABLE;11
+_timescaledb_catalog;compression_settings;BASE TABLE;7
+_timescaledb_catalog;continuous_agg;BASE TABLE;11
+_timescaledb_catalog;continuous_agg_migrate_plan;BASE TABLE;4
+_timescaledb_catalog;continuous_agg_migrate_plan_step;BASE TABLE;7
+_timescaledb_catalog;continuous_aggs_bucket_function;BASE TABLE;7
+_timescaledb_catalog;continuous_aggs_hypertable_invalidation_log;BASE TABLE;3
+_timescaledb_catalog;continuous_aggs_invalidation_threshold;BASE TABLE;2
+_timescaledb_catalog;continuous_aggs_materialization_invalidation_log;BASE TABLE;3
+_timescaledb_catalog;continuous_aggs_materialization_ranges;BASE TABLE;3
+_timescaledb_catalog;continuous_aggs_watermark;BASE TABLE;2
+_timescaledb_catalog;dimension;BASE TABLE;12
+_timescaledb_catalog;dimension_slice;BASE TABLE;4
+_timescaledb_catalog;hypertable;BASE TABLE;12
+_timescaledb_catalog;metadata;BASE TABLE;3
+_timescaledb_catalog;tablespace;BASE TABLE;3
+_timescaledb_catalog;telemetry_event;BASE TABLE;3
+_timescaledb_config;bgw_job;BASE TABLE;17
+_timescaledb_internal;_hyper_1_10_chunk;BASE TABLE;11
+_timescaledb_internal;_hyper_1_11_chunk;BASE TABLE;11
+_timescaledb_internal;_hyper_1_12_chunk;BASE TABLE;11
+_timescaledb_internal;_hyper_1_13_chunk;BASE TABLE;11
+_timescaledb_internal;_hyper_1_14_chunk;BASE TABLE;11
+_timescaledb_internal;_hyper_1_15_chunk;BASE TABLE;11
+_timescaledb_internal;_hyper_1_16_chunk;BASE TABLE;11
+_timescaledb_internal;_hyper_1_1_chunk;BASE TABLE;11
+_timescaledb_internal;_hyper_1_22_chunk;BASE TABLE;11
+_timescaledb_internal;_hyper_1_23_chunk;BASE TABLE;11
+_timescaledb_internal;_hyper_1_24_chunk;BASE TABLE;11
+_timescaledb_internal;_hyper_1_25_chunk;BASE TABLE;11
+_timescaledb_internal;_hyper_1_26_chunk;BASE TABLE;11
+_timescaledb_internal;_hyper_1_27_chunk;BASE TABLE;11
+_timescaledb_internal;_hyper_1_28_chunk;BASE TABLE;11
+_timescaledb_internal;_hyper_1_29_chunk;BASE TABLE;11
+_timescaledb_internal;_hyper_1_2_chunk;BASE TABLE;11
+_timescaledb_internal;_hyper_1_30_chunk;BASE TABLE;11
+_timescaledb_internal;_hyper_1_31_chunk;BASE TABLE;11
+_timescaledb_internal;_hyper_1_32_chunk;BASE TABLE;11
+_timescaledb_internal;_hyper_1_33_chunk;BASE TABLE;11
+_timescaledb_internal;_hyper_1_3_chunk;BASE TABLE;11
+_timescaledb_internal;_hyper_1_4_chunk;BASE TABLE;11
+_timescaledb_internal;_hyper_1_9_chunk;BASE TABLE;11
+_timescaledb_internal;_hyper_2_19_chunk;BASE TABLE;8
+_timescaledb_internal;_hyper_2_20_chunk;BASE TABLE;8
+_timescaledb_internal;_hyper_2_21_chunk;BASE TABLE;8
+_timescaledb_internal;_hyper_2_34_chunk;BASE TABLE;8
+_timescaledb_internal;_hyper_2_35_chunk;BASE TABLE;8
+_timescaledb_internal;_hyper_2_36_chunk;BASE TABLE;8
+_timescaledb_internal;_hyper_2_5_chunk;BASE TABLE;8
+_timescaledb_internal;_hyper_2_6_chunk;BASE TABLE;8
+_timescaledb_internal;_hyper_2_7_chunk;BASE TABLE;8
+_timescaledb_internal;_hyper_3_8_chunk;BASE TABLE;7
+_timescaledb_internal;_materialized_hypertable_3;BASE TABLE;7
+_timescaledb_internal;bgw_job_stat;BASE TABLE;15
+_timescaledb_internal;bgw_job_stat_history;BASE TABLE;7
+_timescaledb_internal;bgw_policy_chunk_stats;BASE TABLE;4
+_timescaledb_internal;_direct_view_3;VIEW;7
+_timescaledb_internal;_partial_view_3;VIEW;7
+_timescaledb_internal;compressed_chunk_stats;VIEW;13
+_timescaledb_internal;hypertable_chunk_local_size;VIEW;14
+api;cagg_station_1h;VIEW;7
+api;v_basin;VIEW;9
+api;v_kpi_precip_cum_24h;VIEW;10
+api;v_latest;VIEW;20
+api;v_latest_station_pivot;VIEW;36
+api;v_map_basins;VIEW;6
+api;v_map_points_kpi;VIEW;29
+api;v_map_station_points;VIEW;15
+api;v_reach;VIEW;8
+api;v_recap_alerte_prevision;VIEW;7
+api;v_recap_apports_journalier;VIEW;9
+api;v_recap_barrage_journalier;VIEW;13
+api;v_recap_debit_journalier;VIEW;8
+api;v_recap_pluie_bv_journalier;VIEW;3
+api;v_recap_pluie_journalier;VIEW;3
+api;v_ref_run;VIEW;9
+api;v_ref_source;VIEW;6
+api;v_ref_variable;VIEW;5
+api;v_ref_variable_id_code;VIEW;2
+api;v_station;VIEW;11
+api;v_timeseries;VIEW;20
+api;v_timeseries_basin;VIEW;25
+api;v_timeseries_station;VIEW;29
+api;v_top_critical_24h;VIEW;14
+api;v_window_station_24h;VIEW;13
+api;v_window_station_24h_fast;VIEW;13
+api;v_window_station_6h;VIEW;13
+api;v_window_station_72h;VIEW;13
+audit;qc_event;BASE TABLE;11
+auth;user;BASE TABLE;7
+files;ingestion;BASE TABLE;9
+files;ingestion_object;BASE TABLE;3
+files;object;BASE TABLE;13
+geo;basin;BASE TABLE;7
+geo;reach;BASE TABLE;6
+geo;station;BASE TABLE;9
+ref;basin_alias;BASE TABLE;4
+ref;dss_mapping;BASE TABLE;19
+ref;run;BASE TABLE;11
+ref;source;BASE TABLE;7
+ref;station_alias;BASE TABLE;4
+ref;variable;BASE TABLE;6
+ref;bassin;VIEW;7
+ref;station;VIEW;9
+ref;v_dss_mapping_active;VIEW;12
+ref;v_dss_mapping_status;VIEW;11
+ref;v_ids;VIEW;2
+ref;v_station_key;VIEW;5
+sebou;alerts;BASE TABLE;8
+sebou;basin_boundary;BASE TABLE;4
+sebou;daily_statistics;BASE TABLE;10
+sebou;field_observations;BASE TABLE;8
+sebou;flood_extents;BASE TABLE;7
+sebou;quality_reports;BASE TABLE;8
+sebou;snow_extents;BASE TABLE;7
+sebou;validation_stations;BASE TABLE;7
+sebou;v_latest_status;VIEW;7
+staging;abhs_sheet_import;BASE TABLE;6
+staging;alias_import;BASE TABLE;9
+staging;basin_raw;BASE TABLE;8
+staging;dss_mapping_import;BASE TABLE;21
+staging;dss_mapping_import_v2;BASE TABLE;16
+staging;station_raw;BASE TABLE;17
+timescaledb_experimental;policies;VIEW;8
+timescaledb_information;chunk_columnstore_settings;VIEW;5
+timescaledb_information;chunk_compression_settings;VIEW;5
+timescaledb_information;chunks;VIEW;13
+timescaledb_information;compression_settings;VIEW;7
+timescaledb_information;continuous_aggregates;VIEW;11
+timescaledb_information;dimensions;VIEW;10
+timescaledb_information;hypertable_columnstore_settings;VIEW;5
+timescaledb_information;hypertable_compression_settings;VIEW;5
+timescaledb_information;hypertables;VIEW;9
+timescaledb_information;job_errors;VIEW;8
+timescaledb_information;job_history;VIEW;11
+timescaledb_information;job_stats;VIEW;12
+timescaledb_information;jobs;VIEW;18
+ts;basin_measurement;BASE TABLE;8
+ts;measurement;BASE TABLE;11
+ts;v_basin_precip_compare;VIEW;8
+ts;v_basin_precip_compare_common_24h;VIEW;8
+ts;v_basin_precip_cum_24h;VIEW;6
+ts;v_basin_precip_last_run;VIEW;7
+ts;v_dss_mapping_active;VIEW;19
+ts;v_dss_mapping_health;VIEW;7

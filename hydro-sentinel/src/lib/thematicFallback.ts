@@ -179,6 +179,57 @@ const snowMaskSecondaryGeojson = buildPatchMaskGeojson(
 );
 
 const snowAoiGeojson = buildAoiGeojson(-5.46, 33.66, -4.56, 34.19);
+const precipAoiGeojson = buildAoiGeojson(-6.65, 33.1, -3.55, 35.95);
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function buildPrecipPointGeojson(seed: number, peakMm: number): Record<string, unknown> {
+  const basePoints: Coordinate[] = [
+    [-6.2, 34.7],
+    [-6.0, 34.62],
+    [-5.85, 34.56],
+    [-5.72, 34.52],
+    [-5.58, 34.48],
+    [-5.42, 34.42],
+    [-5.24, 34.36],
+    [-5.04, 34.3],
+    [-4.85, 34.22],
+    [-4.66, 34.14],
+    [-4.46, 34.04],
+    [-4.28, 33.96],
+    [-4.1, 33.9],
+    [-5.92, 34.38],
+    [-5.73, 34.3],
+    [-5.54, 34.22],
+    [-5.36, 34.16],
+    [-5.18, 34.08],
+    [-5.0, 34.0],
+    [-4.82, 33.92],
+    [-4.64, 33.84],
+  ];
+
+  return {
+    type: "FeatureCollection",
+    features: basePoints.map((point, idx) => {
+      const lonNudge = (seededNoise(seed * 131 + idx * 17) - 0.5) * 0.11;
+      const latNudge = (seededNoise(seed * 157 + idx * 23) - 0.5) * 0.09;
+      const noise = seededNoise(seed * 199 + idx * 29);
+      const intensity = clamp(peakMm * (0.16 + noise * 0.95), 0.1, 170);
+      return {
+        type: "Feature",
+        properties: {
+          intensity: Math.round(intensity * 10) / 10,
+        },
+        geometry: {
+          type: "Point",
+          coordinates: [roundCoord(point[0] + lonNudge), roundCoord(point[1] + latNudge)],
+        },
+      };
+    }),
+  };
+}
 
 const processingChainBase: ProcessingStep[] = [
   {
@@ -217,6 +268,108 @@ const processingChainBase: ProcessingStep[] = [
     description: "Calcul automatique des surfaces m2, km2, ha et pourcentages.",
   },
 ];
+
+const precipTimeline = [
+  { date: "2026-03-26", cum: 45.8, mean: 12.1, peak: 52.3, dominant: "Forte pluie localisee" },
+  { date: "2026-03-27", cum: 31.6, mean: 8.7, peak: 38.4, dominant: "Pluie moderee" },
+  { date: "2026-03-28", cum: 68.9, mean: 17.2, peak: 73.0, dominant: "Episode intense" },
+  { date: "2026-03-29", cum: 55.2, mean: 14.3, peak: 61.1, dominant: "Episode soutenu" },
+  { date: "2026-03-30", cum: 42.7, mean: 11.2, peak: 47.9, dominant: "Pluie moderee" },
+  { date: "2026-03-31", cum: 26.4, mean: 7.4, peak: 31.5, dominant: "Faible a moderee" },
+  { date: "2026-04-01", cum: 52.1, mean: 13.4, peak: 57.8, dominant: "Pluie soutenue" },
+  { date: "2026-04-02", cum: 49.3, mean: 12.9, peak: 55.2, dominant: "Pluie soutenue" },
+  { date: "2026-04-03", cum: 38.7, mean: 10.3, peak: 42.6, dominant: "Pluie moderee" },
+  { date: "2026-04-04", cum: 24.8, mean: 6.8, peak: 29.3, dominant: "Faible a moderee" },
+  { date: "2026-04-05", cum: 18.7, mean: 5.1, peak: 22.4, dominant: "Faible pluie" },
+  { date: "2026-04-06", cum: 34.6, mean: 9.4, peak: 39.2, dominant: "Pluie moderee" },
+  { date: "2026-04-07", cum: 39.1, mean: 10.0, peak: 43.7, dominant: "Pluie moderee" },
+  { date: "2026-04-08", cum: 28.9, mean: 7.6, peak: 33.0, dominant: "Faible a moderee" },
+  { date: "2026-04-09", cum: 20.1, mean: 5.8, peak: 24.9, dominant: "Faible pluie" },
+  { date: "2026-04-10", cum: 12.6, mean: 3.5, peak: 17.2, dominant: "Tres faible pluie" },
+];
+
+const precipTotalAreaKm2 = 40026.67;
+const precipProducts: ThematicMapProduct[] = precipTimeline.map((item, index) => {
+  const parsed = new Date(`${item.date}T00:00:00Z`);
+  const displayDate = parsed.toLocaleDateString("fr-FR");
+  const eventName = `Precipitation detectee le ${displayDate} : ${item.peak.toFixed(1)} mm`;
+  const positiveKm2 = 14600 + index * 240;
+  const positivePct = clamp((positiveKm2 / precipTotalAreaKm2) * 100, 1.5, 95);
+  const negativeKm2 = Math.max(precipTotalAreaKm2 - positiveKm2, 0);
+
+  return {
+    id: `precip-demo-${item.date}`,
+    event_name: eventName,
+    acquisition_start: `${item.date}T00:00:00Z`,
+    acquisition_end: `${item.date}T23:00:00Z`,
+    published_at: `${item.date}T23:20:00Z`,
+    satellite: "ECMWF",
+    status: "ready",
+    bbox: [-6.65, 33.1, -3.55, 35.95],
+    statistics: {
+      positive_class_label: "Zone pluie > 0.1 mm",
+      negative_class_label: "Zone pluie < 0.1 mm",
+      positive_class: {
+        m2: positiveKm2 * 1_000_000,
+        km2: positiveKm2,
+        hectares: positiveKm2 * 100,
+        percentage: positivePct,
+      },
+      negative_class: {
+        m2: negativeKm2 * 1_000_000,
+        km2: negativeKm2,
+        hectares: negativeKm2 * 100,
+        percentage: Math.max(0, 100 - positivePct),
+      },
+      total_area_m2: precipTotalAreaKm2 * 1_000_000,
+    },
+    layers: [
+      {
+        id: `precip-intensity-${item.date}`,
+        name: "Raster precipitation 24h (ECMWF)",
+        kind: "vector",
+        source_type: "geojson",
+        visible: true,
+        opacity: 0.72,
+        asset_path: `/thematic/precipitation/geojson/ecmwf_24h_${item.date}.geojson`,
+        alternate_asset_path: `/thematic/precipitation/geojson/ecmwf_24h_${item.date}_cells.geojson`,
+        legend: [
+          { label: "Classe 1", color: "#1b8f2b" },
+          { label: "Classe 2", color: "#2fa134" },
+          { label: "Classe 3", color: "#58bb2d" },
+          { label: "Classe 4", color: "#84cf2f" },
+          { label: "Classe 5", color: "#b5dd2f" },
+          { label: "Classe 6", color: "#e0e536" },
+          { label: "Classe 7", color: "#f4d331" },
+          { label: "Classe 8", color: "#f7b42c" },
+          { label: "Classe 9", color: "#f78626" },
+          { label: "Classe 10", color: "#f05522" },
+        ],
+      },
+      {
+        id: `precip-aoi-${item.date}`,
+        name: "Zone d'analyse (AOI)",
+        kind: "reference",
+        source_type: "geojson",
+        visible: true,
+        opacity: 0,
+        paint: { fillColor: "#000000", outlineColor: "#ef4444" },
+        legend: [{ label: "Cadre AOI", color: "#ef4444" }],
+        geojson: precipAoiGeojson,
+      },
+    ],
+    meta: {
+      precip_mean_mm: item.mean,
+      precip_cum_mm: item.cum,
+      dominant_level: item.dominant,
+      source: "ECMWF",
+      resolution: "0.1 deg - 24h",
+      color_scale_min_mm: 0.1,
+      color_scale_max_mm: 170,
+      tiff_file: `/thematic/precipitation/ecmwf_24h_${item.date}.tif`,
+    },
+  };
+});
 
 const fallbackDatasets: Record<ThematicMapType, FallbackDataset> = {
   flood: {
@@ -656,6 +809,39 @@ const fallbackDatasets: Record<ThematicMapType, FallbackDataset> = {
         ],
       },
     ],
+  },
+  precip: {
+    map_type: "precip",
+    title: "Carte Precipitation",
+    description: "Donnees de demonstration precipitation 24h ECMWF (historique glissant).",
+    processing_chain: [
+      {
+        id: "acquisition-model",
+        label: "Acquisition modeles meteo",
+        description: "Recuperation des sorties ECMWF 24h pour la zone Sebou.",
+      },
+      {
+        id: "harmonisation",
+        label: "Harmonisation raster",
+        description: "Normalisation de la grille et controle qualite des champs de pluie.",
+      },
+      {
+        id: "colorization",
+        label: "Colorisation intensite",
+        description: "Application d'une palette pluie (vert -> jaune -> orange -> rouge -> violet).",
+      },
+      {
+        id: "aoi-mask",
+        label: "Masquage AOI",
+        description: "Decoupage sur la zone d'analyse et publication cartographique.",
+      },
+      {
+        id: "stats",
+        label: "Calcul des indicateurs",
+        description: "Calcul pluie moyenne/cumulee et surfaces impactees (km2/ha).",
+      },
+    ],
+    products: precipProducts,
   },
 };
 

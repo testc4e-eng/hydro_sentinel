@@ -1,0 +1,1354 @@
+schema;vue;type;sql_definition
+_timescaledb_internal;_direct_view_3;VIEW;" SELECT time_bucket('01:00:00'::interval, ""time"") AS bucket_1h,
+    station_id,
+    variable_id,
+    source_id,
+    run_id_norm AS run_id,
+    sum(value) AS sum_value,
+    max(value) AS max_value
+   FROM ts.measurement
+  GROUP BY (time_bucket('01:00:00'::interval, ""time"")), station_id, variable_id, source_id, run_id_norm;"
+_timescaledb_internal;_partial_view_3;VIEW;" SELECT time_bucket('01:00:00'::interval, ""time"") AS bucket_1h,
+    station_id,
+    variable_id,
+    source_id,
+    run_id_norm AS run_id,
+    sum(value) AS sum_value,
+    max(value) AS max_value
+   FROM ts.measurement
+  GROUP BY (time_bucket('01:00:00'::interval, ""time"")), station_id, variable_id, source_id, run_id_norm;"
+_timescaledb_internal;compressed_chunk_stats;VIEW;" SELECT srcht.schema_name AS hypertable_schema,
+    srcht.table_name AS hypertable_name,
+    srcch.schema_name AS chunk_schema,
+    srcch.table_name AS chunk_name,
+        CASE
+            WHEN (srcch.compressed_chunk_id IS NULL) THEN 'Uncompressed'::text
+            ELSE 'Compressed'::text
+        END AS compression_status,
+    map.uncompressed_heap_size,
+    map.uncompressed_index_size,
+    map.uncompressed_toast_size,
+    ((map.uncompressed_heap_size + map.uncompressed_toast_size) + map.uncompressed_index_size) AS uncompressed_total_size,
+    map.compressed_heap_size,
+    map.compressed_index_size,
+    map.compressed_toast_size,
+    ((map.compressed_heap_size + map.compressed_toast_size) + map.compressed_index_size) AS compressed_total_size
+   FROM ((_timescaledb_catalog.hypertable srcht
+     JOIN _timescaledb_catalog.chunk srcch ON (((srcht.id = srcch.hypertable_id) AND (srcht.compressed_hypertable_id IS NOT NULL) AND (srcch.dropped = false))))
+     LEFT JOIN _timescaledb_catalog.compression_chunk_size map ON ((srcch.id = map.chunk_id)));"
+_timescaledb_internal;hypertable_chunk_local_size;VIEW;" SELECT h.schema_name AS hypertable_schema,
+    h.table_name AS hypertable_name,
+    h.id AS hypertable_id,
+    c.id AS chunk_id,
+    c.schema_name AS chunk_schema,
+    c.table_name AS chunk_name,
+    COALESCE(relsize.total_size, (0)::bigint) AS total_bytes,
+    COALESCE(relsize.heap_size, (0)::bigint) AS heap_bytes,
+    COALESCE(relsize.index_size, (0)::bigint) AS index_bytes,
+    COALESCE(relsize.toast_size, (0)::bigint) AS toast_bytes,
+    COALESCE(relcompsize.total_size, (0)::bigint) AS compressed_total_size,
+    COALESCE(relcompsize.heap_size, (0)::bigint) AS compressed_heap_size,
+    COALESCE(relcompsize.index_size, (0)::bigint) AS compressed_index_size,
+    COALESCE(relcompsize.toast_size, (0)::bigint) AS compressed_toast_size
+   FROM ((((((_timescaledb_catalog.hypertable h
+     JOIN _timescaledb_catalog.chunk c ON (((h.id = c.hypertable_id) AND (c.dropped IS FALSE))))
+     JOIN pg_class cl ON (((cl.relname = c.table_name) AND (cl.relkind = 'r'::""char""))))
+     JOIN pg_namespace n ON (((n.oid = cl.relnamespace) AND (n.nspname = c.schema_name))))
+     JOIN LATERAL _timescaledb_functions.relation_size((cl.oid)::regclass) relsize(total_size, heap_size, index_size, toast_size) ON (true))
+     LEFT JOIN _timescaledb_catalog.chunk comp ON ((comp.id = c.compressed_chunk_id)))
+     LEFT JOIN LATERAL _timescaledb_functions.relation_size(
+        CASE
+            WHEN ((comp.schema_name IS NOT NULL) AND (comp.table_name IS NOT NULL)) THEN (format('%I.%I'::text, comp.schema_name, comp.table_name))::regclass
+            ELSE NULL::regclass
+        END) relcompsize(total_size, heap_size, index_size, toast_size) ON (true));"
+api;cagg_station_1h;VIEW;" SELECT bucket_1h,
+    station_id,
+    variable_id,
+    source_id,
+    run_id,
+    sum_value,
+    max_value
+   FROM _timescaledb_internal._materialized_hypertable_3;"
+api;v_basin;VIEW;" SELECT b.basin_id,
+    b.code AS basin_code,
+    b.name AS basin_name,
+    b.level,
+    b.parent_basin_id,
+    bp.code AS parent_basin_code,
+    bp.name AS parent_basin_name,
+    b.geom,
+    b.created_at
+   FROM (geo.basin b
+     LEFT JOIN geo.basin bp ON ((bp.basin_id = b.parent_basin_id)));"
+api;v_kpi_precip_cum_24h;VIEW;" SELECT entity_type,
+    entity_id,
+    entity_code,
+    entity_name,
+    basin_id,
+    basin_code,
+    basin_name,
+    source_code,
+    run_time,
+    sum(value) AS precip_cum_24h
+   FROM api.v_timeseries
+  WHERE ((variable_code ~~* 'P%'::text) OR (variable_code ~~* '%RAIN%'::text) OR ((variable_code ~~* '%PLUIE%'::text) AND (""time"" >= (now() - '24:00:00'::interval))))
+  GROUP BY entity_type, entity_id, entity_code, entity_name, basin_id, basin_code, basin_name, source_code, run_time;"
+api;v_latest;VIEW;" SELECT DISTINCT ON (entity_type, entity_id, variable_code, source_code, COALESCE(run_time, '1969-12-31 16:00:00-08'::timestamp with time zone)) entity_type,
+    entity_id,
+    entity_code,
+    entity_name,
+    entity_subtype,
+    basin_id,
+    basin_code,
+    basin_name,
+    variable_code,
+    variable_label,
+    variable_unit,
+    source_code,
+    source_label,
+    run_id,
+    run_time,
+    model_name,
+    horizon_hours,
+    ""time"" AS value_time,
+    value,
+    qc_flag
+   FROM api.v_timeseries
+  ORDER BY entity_type, entity_id, variable_code, source_code, COALESCE(run_time, '1969-12-31 16:00:00-08'::timestamp with time zone), ""time"" DESC;"
+api;v_latest_station_pivot;VIEW;" WITH l AS (
+         SELECT v_latest.entity_type,
+            v_latest.entity_id,
+            v_latest.entity_code,
+            v_latest.entity_name,
+            v_latest.entity_subtype,
+            v_latest.basin_id,
+            v_latest.basin_code,
+            v_latest.basin_name,
+            v_latest.variable_code,
+            v_latest.variable_label,
+            v_latest.variable_unit,
+            v_latest.source_code,
+            v_latest.source_label,
+            v_latest.run_id,
+            v_latest.run_time,
+            v_latest.model_name,
+            v_latest.horizon_hours,
+            v_latest.value_time,
+            v_latest.value,
+            v_latest.qc_flag
+           FROM api.v_latest
+          WHERE (v_latest.entity_type = 'station'::text)
+        )
+ SELECT st.station_id,
+    st.station_code,
+    st.station_name,
+    st.station_type,
+    st.basin_id,
+    st.basin_code,
+    st.basin_name,
+    max(l.value) FILTER (WHERE ((l.variable_code = 'precip_mm'::text) AND (l.source_code = 'OBS'::text))) AS precip_obs_mm,
+    max(l.value_time) FILTER (WHERE ((l.variable_code = 'precip_mm'::text) AND (l.source_code = 'OBS'::text))) AS precip_obs_time,
+    max(l.value) FILTER (WHERE ((l.variable_code = 'precip_mm'::text) AND (l.source_code = 'AROME'::text))) AS precip_arome_mm,
+    max(l.value_time) FILTER (WHERE ((l.variable_code = 'precip_mm'::text) AND (l.source_code = 'AROME'::text))) AS precip_arome_time,
+    max(l.run_time) FILTER (WHERE ((l.variable_code = 'precip_mm'::text) AND (l.source_code = 'AROME'::text))) AS precip_arome_run_time,
+    max(l.value) FILTER (WHERE ((l.variable_code = 'precip_mm'::text) AND (l.source_code = 'ECMWF'::text))) AS precip_ecmwf_mm,
+    max(l.value_time) FILTER (WHERE ((l.variable_code = 'precip_mm'::text) AND (l.source_code = 'ECMWF'::text))) AS precip_ecmwf_time,
+    max(l.run_time) FILTER (WHERE ((l.variable_code = 'precip_mm'::text) AND (l.source_code = 'ECMWF'::text))) AS precip_ecmwf_run_time,
+    max(l.value) FILTER (WHERE ((l.variable_code = 'debit_m3s'::text) AND (l.source_code = 'OBS'::text))) AS debit_obs_m3s,
+    max(l.value_time) FILTER (WHERE ((l.variable_code = 'debit_m3s'::text) AND (l.source_code = 'OBS'::text))) AS debit_obs_time,
+    max(l.value) FILTER (WHERE ((l.variable_code = 'debit_m3s'::text) AND (l.source_code = 'SIM'::text))) AS debit_sim_m3s,
+    max(l.value_time) FILTER (WHERE ((l.variable_code = 'debit_m3s'::text) AND (l.source_code = 'SIM'::text))) AS debit_sim_time,
+    max(l.value) FILTER (WHERE ((l.variable_code = 'debit_m3s'::text) AND (l.source_code = 'ABHS_RES'::text))) AS debit_res_m3s,
+    max(l.value_time) FILTER (WHERE ((l.variable_code = 'debit_m3s'::text) AND (l.source_code = 'ABHS_RES'::text))) AS debit_res_time,
+    max(l.run_time) FILTER (WHERE ((l.variable_code = 'debit_m3s'::text) AND (l.source_code = 'ABHS_RES'::text))) AS debit_res_run_time,
+    max(l.value) FILTER (WHERE (l.variable_code = 'apport_m3s'::text)) AS apport_m3s_latest,
+    max(l.value_time) FILTER (WHERE (l.variable_code = 'apport_m3s'::text)) AS apport_m3s_time,
+    max(l.value) FILTER (WHERE (l.variable_code = 'lacher_m3s'::text)) AS lacher_m3s_latest,
+    max(l.value_time) FILTER (WHERE (l.variable_code = 'lacher_m3s'::text)) AS lacher_m3s_time,
+    max(l.value) FILTER (WHERE ((l.variable_code = 'volume_hm3'::text) AND ((l.source_code = 'OBS'::text) OR (l.source_code IS NULL)))) AS volume_obs_hm3,
+    max(l.value) FILTER (WHERE ((l.variable_code = 'volume_hm3'::text) AND (l.source_code = 'SIM'::text))) AS volume_sim_hm3,
+    max(l.value) FILTER (WHERE (l.variable_code = 'volume_hm3'::text)) AS volume_hm3_latest,
+    max(l.value_time) FILTER (WHERE (l.variable_code = 'volume_hm3'::text)) AS volume_hm3_time,
+    max(l.value) FILTER (WHERE (l.variable_code = 'volume_mm3'::text)) AS volume_mm3_latest,
+    max(l.value_time) FILTER (WHERE (l.variable_code = 'volume_mm3'::text)) AS volume_mm3_time,
+    max(l.value) FILTER (WHERE (l.variable_code = 'volume_abhs_hm3'::text)) AS volume_abhs_hm3_latest,
+    max(l.value_time) FILTER (WHERE (l.variable_code = 'volume_abhs_hm3'::text)) AS volume_abhs_hm3_time,
+    max(l.value) FILTER (WHERE (l.variable_code = 'volume_alt_hm3'::text)) AS volume_alt_hm3_latest,
+    max(l.value_time) FILTER (WHERE (l.variable_code = 'volume_alt_hm3'::text)) AS volume_alt_hm3_time
+   FROM (api.v_station st
+     LEFT JOIN l l ON ((l.entity_id = st.station_id)))
+  GROUP BY st.station_id, st.station_code, st.station_name, st.station_type, st.basin_id, st.basin_code, st.basin_name;"
+api;v_map_basins;VIEW;" SELECT basin_id,
+    basin_code,
+    basin_name,
+    level,
+    parent_basin_id,
+    (st_asgeojson(geom))::json AS geometry
+   FROM api.v_basin b;"
+api;v_map_points_kpi;VIEW;" SELECT st.station_id,
+    st.station_code,
+    st.station_name,
+    st.station_type,
+    st.basin_id,
+    st.basin_code,
+    st.basin_name,
+    st.is_active,
+    (st_asgeojson(st.geom))::json AS geometry,
+    p.precip_obs_mm,
+    p.precip_obs_time,
+    p.precip_arome_mm,
+    p.debit_obs_m3s,
+    p.debit_sim_m3s,
+    p.debit_obs_time,
+    p.lacher_m3s_latest,
+    p.lacher_m3s_time,
+    p.volume_hm3_latest,
+    p.volume_obs_hm3,
+    p.volume_sim_hm3,
+    p.volume_hm3_time,
+    tc.source_code AS kpi_source,
+    tc.run_time AS kpi_run_time,
+    tc.precip_cum_24h_mm,
+    tc.debit_max_24h_m3s,
+    tc.lacher_max_24h_m3s,
+    tc.apport_max_24h_m3s,
+    tc.severity,
+    tc.score
+   FROM ((api.v_station st
+     LEFT JOIN api.v_latest_station_pivot p ON ((p.station_id = st.station_id)))
+     LEFT JOIN api.v_top_critical_24h tc ON ((tc.station_id = st.station_id)));"
+api;v_map_station_points;VIEW;" SELECT st.station_id,
+    st.station_code,
+    st.station_name,
+    st.station_type,
+    st.basin_id,
+    st.basin_code,
+    st.basin_name,
+    st.is_active,
+    (st_asgeojson(st.geom))::json AS geometry,
+    l.variable_code,
+    l.source_code,
+    l.run_time,
+    l.value_time,
+    l.value,
+    l.variable_unit
+   FROM (api.v_station st
+     LEFT JOIN api.v_latest l ON (((l.entity_type = 'station'::text) AND (l.entity_id = st.station_id))));"
+api;v_reach;VIEW;" SELECT r.reach_id,
+    r.code AS reach_code,
+    r.name AS reach_name,
+    r.basin_id,
+    b.code AS basin_code,
+    b.name AS basin_name,
+    r.geom,
+    r.created_at
+   FROM (geo.reach r
+     LEFT JOIN geo.basin b ON ((b.basin_id = r.basin_id)));"
+api;v_recap_alerte_prevision;VIEW;" WITH barrage_ref AS (
+         SELECT s.station_id,
+            s.name AS barrage,
+            COALESCE(b.name, '-'::text) AS bassin,
+                CASE
+                    WHEN (lower(s.name) ~~ '%idriss%'::text) THEN (1125)::double precision
+                    WHEN (lower(s.name) ~~ '%wahda%'::text) THEN (3523)::double precision
+                    WHEN ((lower(s.name) ~~ '%ouljet%'::text) OR (lower(s.name) ~~ '%soltane%'::text) OR (lower(s.name) ~~ '%soultane%'::text)) THEN (508)::double precision
+                    ELSE NULL::double precision
+                END AS capacite_mm3
+           FROM (geo.station s
+             LEFT JOIN geo.basin b ON ((b.basin_id = s.basin_id)))
+          WHERE (lower(COALESCE(s.station_type, ''::text)) ~~ '%barrage%'::text)
+        )
+ SELECT (date_trunc('day'::text, m.""time""))::date AS jour,
+    (r.station_id)::text AS barrage_id,
+    r.barrage,
+    r.bassin,
+    r.capacite_mm3,
+    max(m.value) AS volume_prevu_mm3,
+        CASE
+            WHEN (r.capacite_mm3 IS NULL) THEN NULL::double precision
+            ELSE (r.capacite_mm3 - max(m.value))
+        END AS creux_prevu_mm3
+   FROM (((barrage_ref r
+     JOIN ts.measurement m ON ((m.station_id = r.station_id)))
+     JOIN ref.variable v ON ((v.variable_id = m.variable_id)))
+     JOIN ref.source src ON ((src.source_id = m.source_id)))
+  WHERE ((v.code = 'volume_hm3'::text) AND (src.code = 'SIM'::text))
+  GROUP BY ((date_trunc('day'::text, m.""time""))::date), (r.station_id)::text, r.barrage, r.bassin, r.capacite_mm3;"
+api;v_recap_apports_journalier;VIEW;" SELECT jour,
+    barrage_id,
+    barrage,
+    retenue_8h_mm3,
+    debit_max_j,
+    debit_moy_j,
+    restitutions_mm3,
+    apports_mm3,
+    GREATEST((
+        CASE
+            WHEN (lower(barrage) ~~ '%idriss%'::text) THEN (1125)::double precision
+            WHEN (lower(barrage) ~~ '%wahda%'::text) THEN (3523)::double precision
+            WHEN (lower(barrage) ~~ '%ouljet%'::text) THEN (508)::double precision
+            ELSE NULL::double precision
+        END - retenue_8h_mm3), (0)::double precision) AS creux_mm3
+   FROM api.v_recap_debit_journalier d;"
+api;v_recap_barrage_journalier;VIEW;" WITH barrage_ref AS (
+         SELECT s.station_id,
+            s.name AS barrage,
+            COALESCE(b.name, '-'::text) AS bassin,
+                CASE
+                    WHEN (lower(s.name) ~~ '%idriss%'::text) THEN (1125)::double precision
+                    WHEN (lower(s.name) ~~ '%wahda%'::text) THEN (3523)::double precision
+                    WHEN ((lower(s.name) ~~ '%ouljet%'::text) OR (lower(s.name) ~~ '%soltane%'::text) OR (lower(s.name) ~~ '%soultane%'::text)) THEN (508)::double precision
+                    ELSE NULL::double precision
+                END AS capacite_mm3
+           FROM (geo.station s
+             LEFT JOIN geo.basin b ON ((b.basin_id = s.basin_id)))
+          WHERE (lower(COALESCE(s.station_type, ''::text)) ~~ '%barrage%'::text)
+        ), sim_retenue_8h AS (
+         SELECT sub.barrage_id,
+            sub.jour,
+            sub.value AS retenue_sim_8h_mm3
+           FROM ( SELECT (m.station_id)::text AS barrage_id,
+                    (date_trunc('day'::text, m.""time""))::date AS jour,
+                    m.value,
+                    row_number() OVER (PARTITION BY (m.station_id)::text, ((date_trunc('day'::text, m.""time""))::date) ORDER BY (abs(EXTRACT(epoch FROM (m.""time"" - (date_trunc('day'::text, m.""time"") + '08:00:00'::interval))))), m.""time"" DESC) AS rn
+                   FROM (((ts.measurement m
+                     JOIN ref.variable v ON ((v.variable_id = m.variable_id)))
+                     JOIN ref.source src ON ((src.source_id = m.source_id)))
+                     JOIN barrage_ref r ON ((r.station_id = m.station_id)))
+                  WHERE ((v.code = 'volume_hm3'::text) AND (src.code = 'SIM'::text))) sub
+          WHERE (sub.rn = 1)
+        ), sim_volume_8h AS (
+         SELECT sub.barrage_id,
+            sub.jour,
+            sub.value AS volume_sim_8h_mm3
+           FROM ( SELECT (m.station_id)::text AS barrage_id,
+                    (date_trunc('day'::text, m.""time""))::date AS jour,
+                    m.value,
+                    row_number() OVER (PARTITION BY (m.station_id)::text, ((date_trunc('day'::text, m.""time""))::date) ORDER BY (abs(EXTRACT(epoch FROM (m.""time"" - (date_trunc('day'::text, m.""time"") + '08:00:00'::interval))))), m.""time"" DESC) AS rn
+                   FROM (((ts.measurement m
+                     JOIN ref.variable v ON ((v.variable_id = m.variable_id)))
+                     JOIN ref.source src ON ((src.source_id = m.source_id)))
+                     JOIN barrage_ref r ON ((r.station_id = m.station_id)))
+                  WHERE ((v.code = 'volume_hm3'::text) AND (src.code = 'SIM'::text))) sub
+          WHERE (sub.rn = 1)
+        ), daily_agg AS (
+         SELECT (date_trunc('day'::text, m.""time""))::date AS jour,
+            (r.station_id)::text AS barrage_id,
+            r.barrage,
+            r.bassin,
+            r.capacite_mm3,
+            COALESCE(NULLIF(sum(
+                CASE
+                    WHEN ((v.code = 'inflow_m3s'::text) AND (src.code = 'SIM'::text) AND (m.value = m.value)) THEN ((m.value * (3600)::double precision) / (1000000)::double precision)
+                    ELSE NULL::double precision
+                END), 'NaN'::double precision), NULLIF(sum(
+                CASE
+                    WHEN ((v.code = 'flow_m3s'::text) AND (src.code = 'SIM'::text) AND (m.value = m.value)) THEN ((m.value * (3600)::double precision) / (1000000)::double precision)
+                    ELSE NULL::double precision
+                END), 'NaN'::double precision)) AS apports_mm3,
+            sum(
+                CASE
+                    WHEN ((v.code = 'lacher_m3s'::text) AND (src.code = 'SIM'::text) AND (m.value = m.value)) THEN ((m.value * (3600)::double precision) / (1000000)::double precision)
+                    ELSE NULL::double precision
+                END) AS lacher_mm3,
+            max(
+                CASE
+                    WHEN ((v.code = 'flow_m3s'::text) AND (src.code = 'SIM'::text)) THEN m.value
+                    ELSE NULL::double precision
+                END) AS debit_max_m3s,
+            avg(
+                CASE
+                    WHEN ((v.code = 'flow_m3s'::text) AND (src.code = 'SIM'::text)) THEN m.value
+                    ELSE NULL::double precision
+                END) AS debit_moy_m3s
+           FROM (((barrage_ref r
+             LEFT JOIN ts.measurement m ON ((m.station_id = r.station_id)))
+             LEFT JOIN ref.variable v ON ((v.variable_id = m.variable_id)))
+             LEFT JOIN ref.source src ON ((src.source_id = m.source_id)))
+          GROUP BY ((date_trunc('day'::text, m.""time""))::date), (r.station_id)::text, r.barrage, r.bassin, r.capacite_mm3
+        )
+ SELECT d.jour,
+    d.barrage_id,
+    d.barrage,
+    d.bassin,
+    p.pluie_moy_mm,
+    rv.retenue_sim_8h_mm3,
+    d.apports_mm3,
+    sv.volume_sim_8h_mm3,
+        CASE
+            WHEN ((d.capacite_mm3 IS NULL) OR (sv.volume_sim_8h_mm3 IS NULL)) THEN NULL::double precision
+            ELSE (d.capacite_mm3 - sv.volume_sim_8h_mm3)
+        END AS creux_mm3,
+    d.lacher_mm3,
+    d.debit_max_m3s,
+    d.debit_moy_m3s,
+    d.capacite_mm3
+   FROM (((daily_agg d
+     LEFT JOIN api.v_recap_pluie_bv_journalier p ON (((p.barrage_id = d.barrage_id) AND (p.jour = d.jour))))
+     LEFT JOIN sim_retenue_8h rv ON (((rv.barrage_id = d.barrage_id) AND (rv.jour = d.jour))))
+     LEFT JOIN sim_volume_8h sv ON (((sv.barrage_id = d.barrage_id) AND (sv.jour = d.jour))));"
+api;v_recap_debit_journalier;VIEW;" SELECT (date_trunc('day'::text, m.""time""))::date AS jour,
+    (s.station_id)::text AS barrage_id,
+    s.name AS barrage,
+    COALESCE(max(
+        CASE
+            WHEN ((v.code = 'flow_m3s'::text) AND (src.code = 'OBS'::text)) THEN m.value
+            ELSE NULL::double precision
+        END), max(
+        CASE
+            WHEN ((v.code = 'flow_m3s'::text) AND (src.code = 'SIM'::text)) THEN m.value
+            ELSE NULL::double precision
+        END), max(
+        CASE
+            WHEN ((v.code = 'inflow_m3s'::text) AND (src.code = 'OBS'::text)) THEN m.value
+            ELSE NULL::double precision
+        END), max(
+        CASE
+            WHEN ((v.code = 'inflow_m3s'::text) AND (src.code = 'SIM'::text)) THEN m.value
+            ELSE NULL::double precision
+        END)) AS debit_max_j,
+    COALESCE(avg(
+        CASE
+            WHEN ((v.code = 'flow_m3s'::text) AND (src.code = 'OBS'::text)) THEN m.value
+            ELSE NULL::double precision
+        END), avg(
+        CASE
+            WHEN ((v.code = 'flow_m3s'::text) AND (src.code = 'SIM'::text)) THEN m.value
+            ELSE NULL::double precision
+        END), avg(
+        CASE
+            WHEN ((v.code = 'inflow_m3s'::text) AND (src.code = 'OBS'::text)) THEN m.value
+            ELSE NULL::double precision
+        END), avg(
+        CASE
+            WHEN ((v.code = 'inflow_m3s'::text) AND (src.code = 'SIM'::text)) THEN m.value
+            ELSE NULL::double precision
+        END)) AS debit_moy_j,
+    COALESCE(sum(
+        CASE
+            WHEN ((v.code = 'lacher_m3s'::text) AND (src.code = 'OBS'::text)) THEN ((m.value * (3600)::double precision) / (1000000)::double precision)
+            ELSE NULL::double precision
+        END), sum(
+        CASE
+            WHEN ((v.code = 'lacher_m3s'::text) AND (src.code = 'SIM'::text)) THEN ((m.value * (3600)::double precision) / (1000000)::double precision)
+            ELSE NULL::double precision
+        END)) AS restitutions_mm3,
+    COALESCE(max(
+        CASE
+            WHEN ((v.code = 'volume_hm3'::text) AND (src.code = 'OBS'::text) AND (EXTRACT(hour FROM m.""time"") = (8)::numeric)) THEN m.value
+            ELSE NULL::double precision
+        END), max(
+        CASE
+            WHEN ((v.code = 'volume_hm3'::text) AND (src.code = 'SIM'::text) AND (EXTRACT(hour FROM m.""time"") = (8)::numeric)) THEN m.value
+            ELSE NULL::double precision
+        END)) AS retenue_8h_mm3,
+    COALESCE(sum(
+        CASE
+            WHEN ((v.code = 'inflow_m3s'::text) AND (src.code = 'OBS'::text)) THEN ((m.value * (3600)::double precision) / (1000000)::double precision)
+            ELSE NULL::double precision
+        END), sum(
+        CASE
+            WHEN ((v.code = 'inflow_m3s'::text) AND (src.code = 'SIM'::text)) THEN ((m.value * (3600)::double precision) / (1000000)::double precision)
+            ELSE NULL::double precision
+        END)) AS apports_mm3
+   FROM (((ts.measurement m
+     JOIN ref.variable v ON ((v.variable_id = m.variable_id)))
+     JOIN ref.source src ON ((src.source_id = m.source_id)))
+     JOIN geo.station s ON ((s.station_id = m.station_id)))
+  WHERE ((lower(COALESCE(s.station_type, ''::text)) ~~ '%barrage%'::text) AND (src.code = ANY (ARRAY['OBS'::text, 'SIM'::text])) AND (v.code = ANY (ARRAY['flow_m3s'::text, 'inflow_m3s'::text, 'lacher_m3s'::text, 'volume_hm3'::text])))
+  GROUP BY ((date_trunc('day'::text, m.""time""))::date), (s.station_id)::text, s.name;"
+api;v_recap_pluie_bv_journalier;VIEW;" WITH barrage_ref AS (
+         SELECT s_1.station_id,
+            s_1.name AS barrage
+           FROM geo.station s_1
+          WHERE (lower(COALESCE(s_1.station_type, ''::text)) ~~ '%barrage%'::text)
+        ), pluie_station AS (
+         SELECT (date_trunc('day'::text, m.""time""))::date AS jour,
+            (b.station_id)::text AS barrage_id,
+            avg(m.value) AS pluie_moy_mm
+           FROM ((((geo.station b
+             JOIN geo.station p ON (((p.basin_id = b.basin_id) AND (lower(COALESCE(p.station_type, ''::text)) !~~ '%barrage%'::text))))
+             JOIN ts.measurement m ON ((m.station_id = p.station_id)))
+             JOIN ref.variable v ON ((v.variable_id = m.variable_id)))
+             JOIN ref.source src ON ((src.source_id = m.source_id)))
+          WHERE ((lower(COALESCE(b.station_type, ''::text)) ~~ '%barrage%'::text) AND (src.code = ANY (ARRAY['SIM'::text, 'AROME'::text, 'ECMWF'::text, 'OBS'::text])) AND (v.code = 'precip_mm'::text))
+          GROUP BY ((date_trunc('day'::text, m.""time""))::date), (b.station_id)::text
+        ), pluie_dgm_ranked AS (
+         SELECT (date_trunc('day'::text, bm.""time""))::date AS jour,
+            (r.station_id)::text AS barrage_id,
+            src.code AS source_code,
+            avg(bm.value) AS pluie_moy_mm,
+                CASE
+                    WHEN (src.code = 'SIM'::text) THEN 1
+                    WHEN (src.code = 'AROME'::text) THEN 2
+                    WHEN (src.code = 'ECMWF'::text) THEN 3
+                    WHEN (src.code = 'OBS'::text) THEN 4
+                    ELSE 99
+                END AS source_rank
+           FROM ((((barrage_ref r
+             JOIN geo.basin b ON ((((lower(r.barrage) ~~ '%wahda%'::text) AND (lower(COALESCE(b.name, ''::text)) ~~ '%wahda%'::text)) OR ((lower(r.barrage) ~~ '%idriss%'::text) AND (lower(COALESCE(b.name, ''::text)) ~~ '%idriss%'::text)) OR (((lower(r.barrage) ~~ '%ouljet%'::text) OR (lower(r.barrage) ~~ '%soulta%'::text) OR (lower(r.barrage) ~~ '%solta%'::text)) AND ((lower(COALESCE(b.name, ''::text)) ~~ '%ouljet%'::text) OR (lower(COALESCE(b.name, ''::text)) ~~ '%soulta%'::text) OR (lower(COALESCE(b.name, ''::text)) ~~ '%solta%'::text))))))
+             JOIN ts.basin_measurement bm ON ((bm.basin_id = b.basin_id)))
+             JOIN ref.variable v ON ((v.variable_id = bm.variable_id)))
+             JOIN ref.source src ON ((src.source_id = bm.source_id)))
+          WHERE ((v.code = 'precip_mm'::text) AND (src.code = ANY (ARRAY['SIM'::text, 'AROME'::text, 'ECMWF'::text, 'OBS'::text])))
+          GROUP BY ((date_trunc('day'::text, bm.""time""))::date), (r.station_id)::text, src.code
+        ), pluie_dgm AS (
+         SELECT DISTINCT ON (pluie_dgm_ranked.jour, pluie_dgm_ranked.barrage_id) pluie_dgm_ranked.jour,
+            pluie_dgm_ranked.barrage_id,
+            pluie_dgm_ranked.pluie_moy_mm
+           FROM pluie_dgm_ranked
+          ORDER BY pluie_dgm_ranked.jour, pluie_dgm_ranked.barrage_id, pluie_dgm_ranked.source_rank
+        )
+ SELECT COALESCE(d.jour, s.jour) AS jour,
+    COALESCE(d.barrage_id, s.barrage_id) AS barrage_id,
+    COALESCE(d.pluie_moy_mm, s.pluie_moy_mm) AS pluie_moy_mm
+   FROM (pluie_dgm d
+     FULL JOIN pluie_station s ON (((s.jour = d.jour) AND (s.barrage_id = d.barrage_id))));"
+api;v_recap_pluie_journalier;VIEW;" SELECT (date_trunc('day'::text, m.""time""))::date AS jour,
+    (b.station_id)::text AS barrage_id,
+    avg(m.value) AS pluie_moy_dgm
+   FROM ((((geo.station b
+     JOIN geo.station p ON (((p.basin_id = b.basin_id) AND (lower(COALESCE(p.station_type, ''::text)) !~~ '%barrage%'::text))))
+     JOIN ts.measurement m ON ((m.station_id = p.station_id)))
+     JOIN ref.variable v ON ((v.variable_id = m.variable_id)))
+     JOIN ref.source src ON ((src.source_id = m.source_id)))
+  WHERE ((lower(COALESCE(b.station_type, ''::text)) ~~ '%barrage%'::text) AND (src.code = 'OBS'::text) AND (v.code = 'precip_mm'::text))
+  GROUP BY ((date_trunc('day'::text, m.""time""))::date), (b.station_id)::text;"
+api;v_ref_run;VIEW;" SELECT run_id,
+    source_id,
+    model_name,
+    run_time,
+    horizon_hours,
+    grid_name,
+    version,
+    label,
+    updated_at
+   FROM ref.run r;"
+api;v_ref_source;VIEW;" SELECT source_id,
+    code AS source_code,
+    label AS source_label,
+    source_type,
+    provider,
+    description
+   FROM ref.source s;"
+api;v_ref_variable;VIEW;" SELECT variable_id,
+    code AS variable_code,
+    label AS variable_label,
+    unit AS variable_unit,
+    description
+   FROM ref.variable v;"
+api;v_ref_variable_id_code;VIEW;" SELECT variable_id,
+    code
+   FROM ref.variable;"
+api;v_station;VIEW;" SELECT st.station_id,
+    st.code AS station_code,
+    st.name AS station_name,
+    st.station_type,
+    st.basin_id,
+    b.code AS basin_code,
+    b.name AS basin_name,
+    st.elevation_m,
+    st.is_active,
+    st.geom,
+    st.created_at
+   FROM (geo.station st
+     LEFT JOIN geo.basin b ON ((b.basin_id = st.basin_id)));"
+api;v_timeseries;VIEW;" SELECT 'station'::text AS entity_type,
+    ts.station_id AS entity_id,
+    ts.station_code AS entity_code,
+    ts.station_name AS entity_name,
+    ts.station_type AS entity_subtype,
+    ts.basin_id,
+    ts.basin_code,
+    ts.basin_name,
+    ts.""time"",
+    ts.variable_code,
+    ts.variable_label,
+    ts.variable_unit,
+    ts.source_code,
+    ts.source_label,
+    ts.run_id,
+    ts.run_time,
+    ts.model_name,
+    ts.horizon_hours,
+    ts.value,
+    ts.qc_flag
+   FROM api.v_timeseries_station ts
+UNION ALL
+ SELECT 'basin'::text AS entity_type,
+    tb.basin_id AS entity_id,
+    tb.basin_code AS entity_code,
+    tb.basin_name AS entity_name,
+    NULL::text AS entity_subtype,
+    tb.basin_id,
+    tb.basin_code,
+    tb.basin_name,
+    tb.""time"",
+    tb.variable_code,
+    tb.variable_label,
+    tb.variable_unit,
+    tb.source_code,
+    tb.source_label,
+    tb.run_id,
+    tb.run_time,
+    tb.model_name,
+    tb.horizon_hours,
+    tb.value,
+    NULL::smallint AS qc_flag
+   FROM api.v_timeseries_basin tb;"
+api;v_timeseries_basin;VIEW;" SELECT bm.""time"",
+    bm.basin_id,
+    b.basin_code,
+    b.basin_name,
+    b.level,
+    b.parent_basin_id,
+    bm.variable_id,
+    v.variable_code,
+    v.variable_label,
+    v.variable_unit,
+    bm.source_id,
+    s.source_code,
+    s.source_label,
+    s.source_type,
+    s.provider,
+    bm.run_id,
+    r.run_time,
+    r.model_name,
+    r.horizon_hours,
+    r.grid_name,
+    r.version,
+    r.label AS run_label,
+    bm.value,
+    bm.quality,
+    bm.created_at
+   FROM ((((ts.basin_measurement bm
+     JOIN api.v_basin b ON ((b.basin_id = bm.basin_id)))
+     JOIN api.v_ref_variable v ON ((v.variable_id = (bm.variable_id)::smallint)))
+     JOIN api.v_ref_source s ON ((s.source_id = (bm.source_id)::smallint)))
+     LEFT JOIN api.v_ref_run r ON ((r.run_id = bm.run_id)));"
+api;v_timeseries_station;VIEW;" SELECT m.""time"",
+    m.station_id,
+    st.station_code,
+    st.station_name,
+    st.station_type,
+    st.basin_id,
+    st.basin_code,
+    st.basin_name,
+    m.variable_id,
+    v.variable_code,
+    v.variable_label,
+    v.variable_unit,
+    m.source_id,
+    s.source_code,
+    s.source_label,
+    s.source_type,
+    s.provider,
+    m.run_id_norm AS run_id,
+    r.run_time,
+    r.model_name,
+    r.horizon_hours,
+    r.grid_name,
+    r.version,
+    r.label AS run_label,
+    m.value,
+    m.qc_flag,
+    m.ingestion_id,
+    m.file_id,
+    m.inserted_at
+   FROM ((((ts.measurement m
+     JOIN api.v_station st ON ((st.station_id = m.station_id)))
+     JOIN api.v_ref_variable v ON ((v.variable_id = m.variable_id)))
+     JOIN api.v_ref_source s ON ((s.source_id = m.source_id)))
+     LEFT JOIN api.v_ref_run r ON ((r.run_id = m.run_id_norm)));"
+api;v_top_critical_24h;VIEW;" SELECT station_id,
+    station_code,
+    station_name,
+    station_type,
+    basin_code,
+    basin_name,
+    source_code,
+    run_time,
+    precip_cum_24h_mm,
+    debit_max_24h_m3s,
+    lacher_max_24h_m3s,
+    apport_max_24h_m3s,
+        CASE
+            WHEN (COALESCE(lacher_max_24h_m3s, (0)::double precision) >= (500)::double precision) THEN 'ALERTE_LACHER'::text
+            WHEN (COALESCE(debit_max_24h_m3s, (0)::double precision) >= (500)::double precision) THEN 'ALERTE_DEBIT'::text
+            WHEN (COALESCE(precip_cum_24h_mm, (0)::double precision) >= (50)::double precision) THEN 'ALERTE_PLUIE'::text
+            WHEN (COALESCE(precip_cum_24h_mm, (0)::double precision) >= (20)::double precision) THEN 'VIGILANCE_PLUIE'::text
+            ELSE 'OK'::text
+        END AS severity,
+    ((((COALESCE(precip_cum_24h_mm, (0)::double precision) * (1.0)::double precision) + (COALESCE(debit_max_24h_m3s, (0)::double precision) * (0.1)::double precision)) + (COALESCE(lacher_max_24h_m3s, (0)::double precision) * (0.1)::double precision)) + (COALESCE(apport_max_24h_m3s, (0)::double precision) * (0.1)::double precision)) AS score
+   FROM api.v_window_station_24h_fast w
+  WHERE (source_code = ANY (ARRAY['OBS'::text, 'ABHS_RES'::text, 'AROME'::text, 'ECMWF'::text, 'SIM'::text]));"
+api;v_window_station_24h;VIEW;" SELECT station_id,
+    station_code,
+    station_name,
+    station_type,
+    basin_id,
+    basin_code,
+    basin_name,
+    source_code,
+    run_time,
+    sum(value) FILTER (WHERE (variable_code = 'precip_mm'::text)) AS precip_cum_24h_mm,
+    max(value) FILTER (WHERE (variable_code = 'debit_m3s'::text)) AS debit_max_24h_m3s,
+    max(value) FILTER (WHERE (variable_code = 'apport_m3s'::text)) AS apport_max_24h_m3s,
+    max(value) FILTER (WHERE (variable_code = 'lacher_m3s'::text)) AS lacher_max_24h_m3s
+   FROM api.v_timeseries_station ts
+  WHERE (""time"" >= (now() - '24:00:00'::interval))
+  GROUP BY station_id, station_code, station_name, station_type, basin_id, basin_code, basin_name, source_code, run_time;"
+api;v_window_station_24h_fast;VIEW;" WITH v AS (
+         SELECT rv.variable_id,
+            rv.code AS variable_code
+           FROM api.v_ref_variable_id_code rv
+          WHERE (rv.code = ANY (ARRAY['precip_mm'::text, 'debit_m3s'::text, 'lacher_m3s'::text, 'apport_m3s'::text]))
+        ), c AS (
+         SELECT c_1.bucket_1h,
+            c_1.station_id,
+            c_1.variable_id,
+            c_1.source_id,
+            c_1.run_id,
+            c_1.sum_value,
+            c_1.max_value
+           FROM api.cagg_station_1h c_1
+          WHERE (c_1.bucket_1h >= (now() - '24:00:00'::interval))
+        )
+ SELECT st.station_id,
+    st.station_code,
+    st.station_name,
+    st.station_type,
+    st.basin_id,
+    st.basin_code,
+    st.basin_name,
+    rs.code AS source_code,
+    rr.run_time,
+    sum(c.sum_value) FILTER (WHERE (v.variable_code = 'precip_mm'::text)) AS precip_cum_24h_mm,
+    max(c.max_value) FILTER (WHERE (v.variable_code = 'debit_m3s'::text)) AS debit_max_24h_m3s,
+    max(c.max_value) FILTER (WHERE (v.variable_code = 'lacher_m3s'::text)) AS lacher_max_24h_m3s,
+    max(c.max_value) FILTER (WHERE (v.variable_code = 'apport_m3s'::text)) AS apport_max_24h_m3s
+   FROM ((((c
+     JOIN v ON ((v.variable_id = c.variable_id)))
+     JOIN api.v_station st ON ((st.station_id = c.station_id)))
+     JOIN ref.source rs ON ((rs.source_id = c.source_id)))
+     LEFT JOIN ref.run rr ON ((rr.run_id = c.run_id)))
+  GROUP BY st.station_id, st.station_code, st.station_name, st.station_type, st.basin_id, st.basin_code, st.basin_name, rs.code, rr.run_time;"
+api;v_window_station_6h;VIEW;" SELECT station_id,
+    station_code,
+    station_name,
+    station_type,
+    basin_id,
+    basin_code,
+    basin_name,
+    source_code,
+    run_time,
+    sum(value) FILTER (WHERE (variable_code = 'precip_mm'::text)) AS precip_cum_6h_mm,
+    max(value) FILTER (WHERE (variable_code = 'debit_m3s'::text)) AS debit_max_6h_m3s,
+    max(value) FILTER (WHERE (variable_code = 'apport_m3s'::text)) AS apport_max_6h_m3s,
+    max(value) FILTER (WHERE (variable_code = 'lacher_m3s'::text)) AS lacher_max_6h_m3s
+   FROM api.v_timeseries_station ts
+  WHERE (""time"" >= (now() - '06:00:00'::interval))
+  GROUP BY station_id, station_code, station_name, station_type, basin_id, basin_code, basin_name, source_code, run_time;"
+api;v_window_station_72h;VIEW;" SELECT station_id,
+    station_code,
+    station_name,
+    station_type,
+    basin_id,
+    basin_code,
+    basin_name,
+    source_code,
+    run_time,
+    sum(value) FILTER (WHERE (variable_code = 'precip_mm'::text)) AS precip_cum_72h_mm,
+    max(value) FILTER (WHERE (variable_code = 'debit_m3s'::text)) AS debit_max_72h_m3s,
+    max(value) FILTER (WHERE (variable_code = 'apport_m3s'::text)) AS apport_max_72h_m3s,
+    max(value) FILTER (WHERE (variable_code = 'lacher_m3s'::text)) AS lacher_max_72h_m3s
+   FROM api.v_timeseries_station ts
+  WHERE (""time"" >= (now() - '72:00:00'::interval))
+  GROUP BY station_id, station_code, station_name, station_type, basin_id, basin_code, basin_name, source_code, run_time;"
+ref;bassin;VIEW;" SELECT basin_id,
+    code,
+    name,
+    level,
+    parent_basin_id,
+    geom,
+    created_at
+   FROM geo.basin;"
+ref;station;VIEW;" SELECT station_id,
+    code,
+    name,
+    station_type,
+    basin_id,
+    elevation_m,
+    is_active,
+    geom,
+    created_at
+   FROM geo.station;"
+ref;v_dss_mapping_active;VIEW;" SELECT m.dss_mapping_id,
+    m.match_type,
+    m.pathname_match,
+    m.priority,
+    st.code AS station_code,
+    st.name AS station_name,
+    v.code AS variable_code,
+    s.code AS source_code,
+    m.unit_hint,
+    m.notes,
+    m.created_at,
+    m.updated_at
+   FROM (((ref.dss_mapping m
+     JOIN geo.station st ON ((st.station_id = m.station_id)))
+     JOIN ref.variable v ON ((v.variable_id = m.variable_id)))
+     JOIN ref.source s ON ((s.source_id = m.source_id)))
+  WHERE (m.is_active IS TRUE)
+  ORDER BY m.priority, st.code, v.code, s.code;"
+ref;v_dss_mapping_status;VIEW;" SELECT m.dss_mapping_id,
+    m.is_active,
+    m.match_type,
+    m.priority,
+    m.pathname_match,
+    st.code AS station_code,
+    st.name AS station_name,
+    v.code AS variable_code,
+    src.code AS source_code,
+    m.unit_hint,
+    m.updated_at
+   FROM (((ref.dss_mapping m
+     JOIN geo.station st ON ((st.station_id = m.station_id)))
+     JOIN ref.variable v ON ((v.variable_id = m.variable_id)))
+     JOIN ref.source src ON ((src.source_id = m.source_id)))
+  ORDER BY m.is_active DESC, m.priority, st.code, v.code;"
+ref;v_ids;VIEW;" SELECT ( SELECT variable.variable_id
+           FROM ref.variable
+          WHERE (variable.code = 'precip_mm'::text)) AS var_precip,
+    ( SELECT source.source_id
+           FROM ref.source
+          WHERE (source.code = 'OBS'::text)) AS src_obs;"
+ref;v_station_key;VIEW;" SELECT station_id,
+    code,
+    name,
+    station_type,
+    lower(regexp_replace(regexp_replace(regexp_replace(name, '\(.*\)'::text, ''::text, 'g'::text), '\b(bge|barrage)\b'::text, ''::text, 'gi'::text), '\s+'::text, ' '::text, 'g'::text)) AS name_key
+   FROM geo.station s;"
+sebou;v_latest_status;VIEW;" SELECT ds.date,
+    ds.snow_area_km2,
+    ds.snow_percentage,
+    ds.flood_area_km2,
+    ds.quality_score,
+    count(a.id) AS active_alerts,
+    max((a.severity)::text) AS highest_alert_severity
+   FROM (sebou.daily_statistics ds
+     LEFT JOIN sebou.alerts a ON ((((a.status)::text = 'active'::text) AND ((a.created_at)::date = ds.date))))
+  WHERE (ds.date >= (CURRENT_DATE - '7 days'::interval))
+  GROUP BY ds.date, ds.snow_area_km2, ds.snow_percentage, ds.flood_area_km2, ds.quality_score
+  ORDER BY ds.date DESC;"
+timescaledb_experimental;policies;VIEW;" SELECT ca.user_view_name AS relation_name,
+    ca.user_view_schema AS relation_schema,
+    j.schedule_interval,
+    j.proc_schema,
+    j.proc_name,
+    j.config,
+    ht.schema_name AS hypertable_schema,
+    ht.table_name AS hypertable_name
+   FROM ((_timescaledb_config.bgw_job j
+     JOIN _timescaledb_catalog.continuous_agg ca ON ((ca.mat_hypertable_id = j.hypertable_id)))
+     JOIN _timescaledb_catalog.hypertable ht ON ((ht.id = ca.mat_hypertable_id)));"
+timescaledb_information;chunk_columnstore_settings;VIEW;" SELECT hypertable,
+    chunk,
+    segmentby,
+    orderby,
+    index
+   FROM timescaledb_information.chunk_compression_settings;"
+timescaledb_information;chunk_compression_settings;VIEW;" SELECT (format('%I.%I'::text, ht.schema_name, ht.table_name))::regclass AS hypertable,
+    (format('%I.%I'::text, ch.schema_name, ch.table_name))::regclass AS chunk,
+    array_to_string(s.segmentby, ','::text) AS segmentby,
+    un.orderby,
+    s.index
+   FROM (((_timescaledb_catalog.hypertable ht
+     JOIN _timescaledb_catalog.chunk ch ON ((ch.hypertable_id = ht.id)))
+     JOIN _timescaledb_catalog.compression_settings s ON ((((format('%I.%I'::text, ch.schema_name, ch.table_name))::regclass)::oid = (s.relid)::oid)))
+     LEFT JOIN LATERAL ( SELECT string_agg(format('%I%s%s'::text, un_1.orderby,
+                CASE
+                    WHEN un_1.""desc"" THEN ' DESC'::text
+                    ELSE ''::text
+                END,
+                CASE
+                    WHEN (un_1.nullsfirst AND (NOT un_1.""desc"")) THEN ' NULLS FIRST'::text
+                    WHEN ((NOT un_1.nullsfirst) AND un_1.""desc"") THEN ' NULLS LAST'::text
+                    ELSE ''::text
+                END), ','::text) AS orderby
+           FROM UNNEST(s.orderby, s.orderby_desc, s.orderby_nullsfirst) un_1(orderby, ""desc"", nullsfirst)) un ON (true));"
+timescaledb_information;chunks;VIEW;" SELECT hypertable_schema,
+    hypertable_name,
+    schema_name AS chunk_schema,
+    chunk_name,
+    primary_dimension,
+    primary_dimension_type,
+    range_start,
+    range_end,
+    integer_range_start AS range_start_integer,
+    integer_range_end AS range_end_integer,
+    is_compressed,
+    chunk_table_space AS chunk_tablespace,
+    creation_time AS chunk_creation_time
+   FROM ( SELECT ht.schema_name AS hypertable_schema,
+            ht.table_name AS hypertable_name,
+            srcch.schema_name,
+            srcch.table_name AS chunk_name,
+            dim.column_name AS primary_dimension,
+            dim.column_type AS primary_dimension_type,
+            row_number() OVER (PARTITION BY chcons.chunk_id ORDER BY dim.id) AS chunk_dimension_num,
+                CASE
+                    WHEN ((dim.column_type)::oid = ANY ((ARRAY['timestamp without time zone'::regtype, 'timestamp with time zone'::regtype, 'date'::regtype, 'uuid'::regtype])::oid[])) THEN _timescaledb_functions.to_timestamp(dimsl.range_start)
+                    ELSE NULL::timestamp with time zone
+                END AS range_start,
+                CASE
+                    WHEN ((dim.column_type)::oid = ANY ((ARRAY['timestamp without time zone'::regtype, 'timestamp with time zone'::regtype, 'date'::regtype, 'uuid'::regtype])::oid[])) THEN _timescaledb_functions.to_timestamp(dimsl.range_end)
+                    ELSE NULL::timestamp with time zone
+                END AS range_end,
+                CASE
+                    WHEN ((dim.column_type)::oid = ANY ((ARRAY['timestamp without time zone'::regtype, 'timestamp with time zone'::regtype, 'date'::regtype, 'uuid'::regtype])::oid[])) THEN NULL::bigint
+                    ELSE dimsl.range_start
+                END AS integer_range_start,
+                CASE
+                    WHEN ((dim.column_type)::oid = ANY ((ARRAY['timestamp without time zone'::regtype, 'timestamp with time zone'::regtype, 'date'::regtype, 'uuid'::regtype])::oid[])) THEN NULL::bigint
+                    ELSE dimsl.range_end
+                END AS integer_range_end,
+                CASE
+                    WHEN ((srcch.status & 1) = 1) THEN true
+                    ELSE false
+                END AS is_compressed,
+            pgtab.spcname AS chunk_table_space,
+            srcch.creation_time
+           FROM ((((((_timescaledb_catalog.chunk srcch
+             JOIN _timescaledb_catalog.hypertable ht ON ((ht.id = srcch.hypertable_id)))
+             JOIN _timescaledb_catalog.chunk_constraint chcons ON ((srcch.id = chcons.chunk_id)))
+             JOIN _timescaledb_catalog.dimension dim ON ((srcch.hypertable_id = dim.hypertable_id)))
+             JOIN _timescaledb_catalog.dimension_slice dimsl ON (((dim.id = dimsl.dimension_id) AND (chcons.dimension_slice_id = dimsl.id))))
+             JOIN ( SELECT pg_class.relname,
+                    pg_class.reltablespace,
+                    pg_namespace.nspname AS schema_name
+                   FROM pg_class,
+                    pg_namespace
+                  WHERE (pg_class.relnamespace = pg_namespace.oid)) cl ON (((srcch.table_name = cl.relname) AND (srcch.schema_name = cl.schema_name))))
+             LEFT JOIN pg_tablespace pgtab ON ((pgtab.oid = cl.reltablespace)))
+          WHERE ((srcch.dropped IS FALSE) AND (srcch.osm_chunk IS FALSE) AND (ht.compression_state <> 2))) finalq
+  WHERE (chunk_dimension_num = 1);"
+timescaledb_information;compression_settings;VIEW;" SELECT ht.schema_name AS hypertable_schema,
+    ht.table_name AS hypertable_name,
+    ((unnest(cs.segmentby))::name COLLATE ""C"") AS attname,
+    (generate_series(1, array_length(cs.segmentby, 1)))::smallint AS segmentby_column_index,
+    NULL::smallint AS orderby_column_index,
+    NULL::boolean AS orderby_asc,
+    NULL::boolean AS orderby_nullsfirst
+   FROM (_timescaledb_catalog.hypertable ht
+     JOIN _timescaledb_catalog.compression_settings cs ON ((((cs.relid)::oid = ((format('%I.%I'::text, ht.schema_name, ht.table_name))::regclass)::oid) AND (cs.segmentby IS NOT NULL))))
+  WHERE (ht.compressed_hypertable_id IS NOT NULL)
+UNION ALL
+ SELECT ht.schema_name AS hypertable_schema,
+    ht.table_name AS hypertable_name,
+    ((unnest(cs.orderby))::name COLLATE ""C"") AS attname,
+    NULL::smallint AS segmentby_column_index,
+    (generate_series(1, array_length(cs.orderby, 1)))::smallint AS orderby_column_index,
+    unnest(array_replace(array_replace(array_replace(cs.orderby_desc, false, NULL::boolean), true, false), NULL::boolean, true)) AS orderby_asc,
+    unnest(cs.orderby_nullsfirst) AS orderby_nullsfirst
+   FROM (_timescaledb_catalog.hypertable ht
+     JOIN _timescaledb_catalog.compression_settings cs ON ((((cs.relid)::oid = ((format('%I.%I'::text, ht.schema_name, ht.table_name))::regclass)::oid) AND (cs.orderby IS NOT NULL))))
+  WHERE (ht.compressed_hypertable_id IS NOT NULL)
+  ORDER BY 2, 4, 5;"
+timescaledb_information;continuous_aggregates;VIEW;" SELECT ht.schema_name AS hypertable_schema,
+    ht.table_name AS hypertable_name,
+    cagg.user_view_schema AS view_schema,
+    cagg.user_view_name AS view_name,
+    viewinfo.viewowner AS view_owner,
+    cagg.materialized_only,
+        CASE
+            WHEN (mat_ht.compressed_hypertable_id IS NOT NULL) THEN true
+            ELSE false
+        END AS compression_enabled,
+    mat_ht.schema_name AS materialization_hypertable_schema,
+    mat_ht.table_name AS materialization_hypertable_name,
+    directview.viewdefinition AS view_definition,
+    cagg.finalized
+   FROM _timescaledb_catalog.continuous_agg cagg,
+    _timescaledb_catalog.hypertable ht,
+    LATERAL ( SELECT c.oid,
+            pg_get_userbyid(c.relowner) AS viewowner
+           FROM (pg_class c
+             LEFT JOIN pg_namespace n ON ((n.oid = c.relnamespace)))
+          WHERE ((c.relkind = 'v'::""char"") AND (c.relname = cagg.user_view_name) AND (n.nspname = cagg.user_view_schema))) viewinfo,
+    LATERAL ( SELECT pg_get_viewdef(c.oid) AS viewdefinition
+           FROM (pg_class c
+             LEFT JOIN pg_namespace n ON ((n.oid = c.relnamespace)))
+          WHERE ((c.relkind = 'v'::""char"") AND (c.relname = cagg.direct_view_name) AND (n.nspname = cagg.direct_view_schema))) directview,
+    LATERAL ( SELECT hypertable.schema_name,
+            hypertable.table_name,
+            hypertable.compressed_hypertable_id
+           FROM _timescaledb_catalog.hypertable
+          WHERE (cagg.mat_hypertable_id = hypertable.id)) mat_ht
+  WHERE (cagg.raw_hypertable_id = ht.id);"
+timescaledb_information;dimensions;VIEW;" SELECT ht.schema_name AS hypertable_schema,
+    ht.table_name AS hypertable_name,
+    rank() OVER (PARTITION BY dim.hypertable_id ORDER BY dim.id) AS dimension_number,
+    dim.column_name,
+    dim.column_type,
+        CASE
+            WHEN (dim.interval_length IS NULL) THEN 'Space'::text
+            ELSE 'Time'::text
+        END AS dimension_type,
+        CASE
+            WHEN (dim.interval_length IS NOT NULL) THEN
+            CASE
+                WHEN ((dim.column_type)::oid = ANY ((ARRAY['timestamp without time zone'::regtype, 'timestamp with time zone'::regtype, 'date'::regtype])::oid[])) THEN _timescaledb_functions.to_interval(dim.interval_length)
+                ELSE NULL::interval
+            END
+            ELSE NULL::interval
+        END AS time_interval,
+        CASE
+            WHEN (dim.interval_length IS NOT NULL) THEN
+            CASE
+                WHEN ((dim.column_type)::oid = ANY ((ARRAY['timestamp without time zone'::regtype, 'timestamp with time zone'::regtype, 'date'::regtype])::oid[])) THEN NULL::bigint
+                ELSE dim.interval_length
+            END
+            ELSE NULL::bigint
+        END AS integer_interval,
+    dim.integer_now_func,
+    dim.num_slices AS num_partitions
+   FROM _timescaledb_catalog.hypertable ht,
+    _timescaledb_catalog.dimension dim
+  WHERE (dim.hypertable_id = ht.id);"
+timescaledb_information;hypertable_columnstore_settings;VIEW;" SELECT hypertable,
+    segmentby,
+    orderby,
+    compress_interval_length,
+    index
+   FROM timescaledb_information.hypertable_compression_settings;"
+timescaledb_information;hypertable_compression_settings;VIEW;" SELECT (format('%I.%I'::text, ht.schema_name, ht.table_name))::regclass AS hypertable,
+    array_to_string(s.segmentby, ','::text) AS segmentby,
+    un.orderby,
+    d.compress_interval_length,
+    s.index
+   FROM (((_timescaledb_catalog.hypertable ht
+     JOIN LATERAL ( SELECT
+                CASE
+                    WHEN ((d_1.column_type)::oid = ANY ((ARRAY['timestamp without time zone'::regtype, 'timestamp with time zone'::regtype, 'date'::regtype])::oid[])) THEN (_timescaledb_functions.to_interval(d_1.compress_interval_length))::text
+                    ELSE (d_1.compress_interval_length)::text
+                END AS compress_interval_length
+           FROM _timescaledb_catalog.dimension d_1
+          WHERE (d_1.hypertable_id = ht.id)
+          ORDER BY d_1.id
+         LIMIT 1) d ON (true))
+     LEFT JOIN _timescaledb_catalog.compression_settings s ON ((((format('%I.%I'::text, ht.schema_name, ht.table_name))::regclass)::oid = (s.relid)::oid)))
+     LEFT JOIN LATERAL ( SELECT string_agg(format('%I%s%s'::text, un_1.orderby,
+                CASE
+                    WHEN un_1.""desc"" THEN ' DESC'::text
+                    ELSE ''::text
+                END,
+                CASE
+                    WHEN (un_1.nullsfirst AND (NOT un_1.""desc"")) THEN ' NULLS FIRST'::text
+                    WHEN ((NOT un_1.nullsfirst) AND un_1.""desc"") THEN ' NULLS LAST'::text
+                    ELSE ''::text
+                END), ','::text) AS orderby
+           FROM UNNEST(s.orderby, s.orderby_desc, s.orderby_nullsfirst) un_1(orderby, ""desc"", nullsfirst)) un ON (true));"
+timescaledb_information;hypertables;VIEW;" WITH hypertable_info AS (
+         SELECT di.hypertable_id,
+            ht_1.schema_name,
+            ht_1.table_name,
+            ht_1.num_dimensions,
+            ht_1.compression_state,
+            di.column_name,
+            di.column_type,
+            di.interval_length,
+            (ht_1.compression_state = 1) AS compression_enabled,
+            row_number() OVER (PARTITION BY di.hypertable_id ORDER BY di.id) AS dimension_num
+           FROM (_timescaledb_catalog.hypertable ht_1
+             JOIN _timescaledb_catalog.dimension di ON ((ht_1.id = di.hypertable_id)))
+        )
+ SELECT ht.schema_name AS hypertable_schema,
+    ht.table_name AS hypertable_name,
+    t.tableowner AS owner,
+    ht.num_dimensions,
+    ( SELECT count(1) AS count
+           FROM _timescaledb_catalog.chunk ch
+          WHERE ((ch.hypertable_id = ht.hypertable_id) AND (ch.dropped IS FALSE) AND (ch.osm_chunk IS FALSE))) AS num_chunks,
+    ht.compression_enabled,
+    srchtbs.tablespace_list AS tablespaces,
+    ht.column_name AS primary_dimension,
+    ht.column_type AS primary_dimension_type
+   FROM (((hypertable_info ht
+     JOIN pg_tables t ON (((ht.table_name = t.tablename) AND (ht.schema_name = t.schemaname))))
+     LEFT JOIN _timescaledb_catalog.continuous_agg ca ON ((ca.mat_hypertable_id = ht.hypertable_id)))
+     LEFT JOIN ( SELECT tablespace.hypertable_id,
+            array_agg(tablespace.tablespace_name ORDER BY tablespace.id) AS tablespace_list
+           FROM _timescaledb_catalog.tablespace
+          GROUP BY tablespace.hypertable_id) srchtbs ON ((ht.hypertable_id = srchtbs.hypertable_id)))
+  WHERE ((ht.compression_state <> 2) AND (ca.mat_hypertable_id IS NULL) AND (ht.interval_length IS NOT NULL) AND (ht.dimension_num = 1));"
+timescaledb_information;job_errors;VIEW;" SELECT h.job_id,
+    ((h.data -> 'job'::text) ->> 'proc_schema'::text) AS proc_schema,
+    ((h.data -> 'job'::text) ->> 'proc_name'::text) AS proc_name,
+    h.pid,
+    h.execution_start AS start_time,
+    h.execution_finish AS finish_time,
+    ((h.data -> 'error_data'::text) ->> 'sqlerrcode'::text) AS sqlerrcode,
+        CASE
+            WHEN ((h.succeeded IS NULL) AND (h.execution_finish IS NULL) AND (h.pid IS NULL)) THEN 'job crash detected, see server logs'::text
+            WHEN (((h.data -> 'error_data'::text) ->> 'message'::text) IS NOT NULL) THEN
+            CASE
+                WHEN (((h.data -> 'error_data'::text) ->> 'detail'::text) IS NOT NULL) THEN
+                CASE
+                    WHEN (((h.data -> 'error_data'::text) ->> 'hint'::text) IS NOT NULL) THEN concat(((h.data -> 'error_data'::text) ->> 'message'::text), '. ', ((h.data -> 'error_data'::text) ->> 'detail'::text), '. ', ((h.data -> 'error_data'::text) ->> 'hint'::text))
+                    ELSE concat(((h.data -> 'error_data'::text) ->> 'message'::text), ' ', ((h.data -> 'error_data'::text) ->> 'detail'::text))
+                END
+                ELSE
+                CASE
+                    WHEN (((h.data -> 'error_data'::text) ->> 'hint'::text) IS NOT NULL) THEN concat(((h.data -> 'error_data'::text) ->> 'message'::text), '. ', ((h.data -> 'error_data'::text) ->> 'hint'::text))
+                    ELSE ((h.data -> 'error_data'::text) ->> 'message'::text)
+                END
+            END
+            ELSE NULL::text
+        END AS err_message
+   FROM (_timescaledb_internal.bgw_job_stat_history h
+     LEFT JOIN _timescaledb_config.bgw_job j ON ((j.id = h.job_id)))
+  WHERE ((h.succeeded IS FALSE) OR ((h.succeeded IS NULL) AND ((pg_has_role(CURRENT_USER, ( SELECT pg_get_userbyid(pg_database.datdba) AS pg_get_userbyid
+           FROM pg_database
+          WHERE (pg_database.datname = current_database())), 'MEMBER'::text) IS TRUE) OR (pg_has_role(CURRENT_USER, (j.owner)::oid, 'MEMBER'::text) IS TRUE))));"
+timescaledb_information;job_history;VIEW;" SELECT h.id,
+    h.job_id,
+    h.succeeded,
+    COALESCE(((h.data -> 'job'::text) ->> 'proc_schema'::text), (j.proc_schema)::text) AS proc_schema,
+    COALESCE(((h.data -> 'job'::text) ->> 'proc_name'::text), (j.proc_name)::text) AS proc_name,
+    h.pid,
+    h.execution_start AS start_time,
+    h.execution_finish AS finish_time,
+    ((h.data -> 'job'::text) -> 'config'::text) AS config,
+    ((h.data -> 'error_data'::text) ->> 'sqlerrcode'::text) AS sqlerrcode,
+        CASE
+            WHEN ((h.succeeded IS NULL) AND (h.execution_finish IS NULL) AND (h.pid IS NULL)) THEN 'job crash detected, see server logs'::text
+            WHEN ((h.succeeded IS FALSE) AND (((h.data -> 'error_data'::text) ->> 'message'::text) IS NOT NULL)) THEN
+            CASE
+                WHEN (((h.data -> 'error_data'::text) ->> 'detail'::text) IS NOT NULL) THEN
+                CASE
+                    WHEN (((h.data -> 'error_data'::text) ->> 'hint'::text) IS NOT NULL) THEN concat(((h.data -> 'error_data'::text) ->> 'message'::text), '. ', ((h.data -> 'error_data'::text) ->> 'detail'::text), '. ', ((h.data -> 'error_data'::text) ->> 'hint'::text))
+                    ELSE concat(((h.data -> 'error_data'::text) ->> 'message'::text), ' ', ((h.data -> 'error_data'::text) ->> 'detail'::text))
+                END
+                ELSE
+                CASE
+                    WHEN (((h.data -> 'error_data'::text) ->> 'hint'::text) IS NOT NULL) THEN concat(((h.data -> 'error_data'::text) ->> 'message'::text), '. ', ((h.data -> 'error_data'::text) ->> 'hint'::text))
+                    ELSE ((h.data -> 'error_data'::text) ->> 'message'::text)
+                END
+            END
+            ELSE NULL::text
+        END AS err_message
+   FROM (_timescaledb_internal.bgw_job_stat_history h
+     LEFT JOIN _timescaledb_config.bgw_job j ON ((j.id = h.job_id)))
+  WHERE ((pg_has_role(CURRENT_USER, ( SELECT pg_get_userbyid(pg_database.datdba) AS pg_get_userbyid
+           FROM pg_database
+          WHERE (pg_database.datname = current_database())), 'MEMBER'::text) IS TRUE) OR (pg_has_role(CURRENT_USER, (j.owner)::oid, 'MEMBER'::text) IS TRUE));"
+timescaledb_information;job_stats;VIEW;" SELECT ht.schema_name AS hypertable_schema,
+    ht.table_name AS hypertable_name,
+    j.id AS job_id,
+    js.last_start AS last_run_started_at,
+    js.last_successful_finish,
+        CASE
+            WHEN (js.last_finish < '4714-11-23 16:07:02-07:52:58 BC'::timestamp with time zone) THEN NULL::text
+            WHEN (js.last_finish IS NOT NULL) THEN
+            CASE
+                WHEN (js.last_run_success = true) THEN 'Success'::text
+                WHEN (js.last_run_success = false) THEN 'Failed'::text
+                ELSE NULL::text
+            END
+            ELSE NULL::text
+        END AS last_run_status,
+        CASE
+            WHEN (pgs.state = 'active'::text) THEN 'Running'::text
+            WHEN (j.scheduled = false) THEN 'Paused'::text
+            ELSE 'Scheduled'::text
+        END AS job_status,
+        CASE
+            WHEN (js.last_finish > js.last_start) THEN (js.last_finish - js.last_start)
+            ELSE NULL::interval
+        END AS last_run_duration,
+        CASE
+            WHEN j.scheduled THEN js.next_start
+            ELSE NULL::timestamp with time zone
+        END AS next_start,
+    js.total_runs,
+    js.total_successes,
+    js.total_failures
+   FROM (((_timescaledb_config.bgw_job j
+     LEFT JOIN _timescaledb_internal.bgw_job_stat js ON ((j.id = js.job_id)))
+     LEFT JOIN _timescaledb_catalog.hypertable ht ON ((j.hypertable_id = ht.id)))
+     LEFT JOIN pg_stat_activity pgs ON (((pgs.datname = current_database()) AND (pgs.application_name = j.application_name))))
+  ORDER BY ht.schema_name, ht.table_name;"
+timescaledb_information;jobs;VIEW;" SELECT j.id AS job_id,
+    j.application_name,
+    j.schedule_interval,
+    j.max_runtime,
+    j.max_retries,
+    j.retry_period,
+    j.proc_schema,
+    j.proc_name,
+    j.owner,
+    j.scheduled,
+    j.fixed_schedule,
+    j.config,
+    js.next_start,
+    j.initial_start,
+    COALESCE(ca.user_view_schema, ht.schema_name) AS hypertable_schema,
+    COALESCE(ca.user_view_name, ht.table_name) AS hypertable_name,
+    j.check_schema,
+    j.check_name
+   FROM (((_timescaledb_config.bgw_job j
+     LEFT JOIN _timescaledb_catalog.hypertable ht ON ((ht.id = j.hypertable_id)))
+     LEFT JOIN _timescaledb_internal.bgw_job_stat js ON ((js.job_id = j.id)))
+     LEFT JOIN _timescaledb_catalog.continuous_agg ca ON ((ca.mat_hypertable_id = j.hypertable_id)));"
+ts;v_basin_precip_compare;VIEW;" WITH c AS (
+         SELECT v_basin_precip_cum_24h.basin_id,
+            v_basin_precip_cum_24h.basin_code,
+            v_basin_precip_cum_24h.basin_name,
+            v_basin_precip_cum_24h.source,
+            v_basin_precip_cum_24h.ref_time,
+            v_basin_precip_cum_24h.cum_24h_mm
+           FROM ts.v_basin_precip_cum_24h
+        )
+ SELECT a.basin_id,
+    a.basin_code,
+    a.basin_name,
+    a.ref_time,
+    a.cum_24h_mm AS arome_24h_mm,
+    e.cum_24h_mm AS ecmwf_24h_mm,
+    (a.cum_24h_mm - e.cum_24h_mm) AS diff_mm,
+        CASE
+            WHEN (e.cum_24h_mm > (0)::double precision) THEN (a.cum_24h_mm / e.cum_24h_mm)
+            ELSE NULL::double precision
+        END AS ratio_arome_ecmwf
+   FROM (c a
+     JOIN c e ON (((a.basin_id = e.basin_id) AND (a.ref_time = e.ref_time))))
+  WHERE ((a.source = 'AROME'::text) AND (e.source = 'ECMWF'::text));"
+ts;v_basin_precip_compare_common_24h;VIEW;" WITH bounds AS (
+         SELECT bm.basin_id,
+            max(bm.""time"") FILTER (WHERE (s.code = 'AROME'::text)) AS max_arome,
+            max(bm.""time"") FILTER (WHERE (s.code = 'ECMWF'::text)) AS max_ecmwf
+           FROM ((ts.basin_measurement bm
+             JOIN ref.variable v ON ((v.variable_id = bm.variable_id)))
+             JOIN ref.source s ON ((s.source_id = bm.source_id)))
+          WHERE (v.code = 'precip_mm'::text)
+          GROUP BY bm.basin_id
+        ), common AS (
+         SELECT bounds.basin_id,
+            LEAST(bounds.max_arome, bounds.max_ecmwf) AS ref_time_common
+           FROM bounds
+          WHERE ((bounds.max_arome IS NOT NULL) AND (bounds.max_ecmwf IS NOT NULL))
+        ), agg AS (
+         SELECT bm.basin_id,
+            s.code AS source,
+            c.ref_time_common,
+            sum(bm.value) AS cum_24h_mm
+           FROM (((ts.basin_measurement bm
+             JOIN ref.variable v ON ((v.variable_id = bm.variable_id)))
+             JOIN ref.source s ON ((s.source_id = bm.source_id)))
+             JOIN common c ON (((c.basin_id = bm.basin_id) AND (bm.""time"" >= (c.ref_time_common - '24:00:00'::interval)) AND (bm.""time"" <= c.ref_time_common))))
+          WHERE ((v.code = 'precip_mm'::text) AND (s.code = ANY (ARRAY['AROME'::text, 'ECMWF'::text])))
+          GROUP BY bm.basin_id, s.code, c.ref_time_common
+        )
+ SELECT b.basin_id,
+    b.code AS basin_code,
+    b.name AS basin_name,
+    a.ref_time_common,
+    a.cum_24h_mm AS arome_24h_mm,
+    e.cum_24h_mm AS ecmwf_24h_mm,
+    (a.cum_24h_mm - e.cum_24h_mm) AS diff_mm,
+        CASE
+            WHEN (e.cum_24h_mm > (0)::double precision) THEN (a.cum_24h_mm / e.cum_24h_mm)
+            ELSE NULL::double precision
+        END AS ratio_arome_ecmwf
+   FROM ((agg a
+     JOIN agg e ON (((e.basin_id = a.basin_id) AND (e.ref_time_common = a.ref_time_common))))
+     JOIN geo.basin b ON ((b.basin_id = a.basin_id)))
+  WHERE ((a.source = 'AROME'::text) AND (e.source = 'ECMWF'::text));"
+ts;v_basin_precip_cum_24h;VIEW;" WITH last_time AS (
+         SELECT basin_measurement.basin_id,
+            basin_measurement.source_id,
+            max(basin_measurement.""time"") AS ref_time
+           FROM ts.basin_measurement
+          GROUP BY basin_measurement.basin_id, basin_measurement.source_id
+        )
+ SELECT b.basin_id,
+    b.code AS basin_code,
+    b.name AS basin_name,
+    s.code AS source,
+    lt.ref_time,
+    sum(bm.value) AS cum_24h_mm
+   FROM ((((ts.basin_measurement bm
+     JOIN last_time lt ON (((bm.basin_id = lt.basin_id) AND (bm.source_id = lt.source_id) AND (bm.""time"" >= (lt.ref_time - '24:00:00'::interval)))))
+     JOIN ref.variable v ON ((v.variable_id = bm.variable_id)))
+     JOIN ref.source s ON ((s.source_id = bm.source_id)))
+     JOIN geo.basin b ON ((b.basin_id = bm.basin_id)))
+  WHERE (v.code = 'precip_mm'::text)
+  GROUP BY b.basin_id, b.code, b.name, s.code, lt.ref_time;"
+ts;v_basin_precip_last_run;VIEW;" WITH last_run AS (
+         SELECT DISTINCT ON (r.source_id) r.source_id,
+            r.run_id,
+            r.run_time
+           FROM ref.run r
+          ORDER BY r.source_id, r.run_time DESC
+        )
+ SELECT bm.""time"",
+    bm.value,
+    s.code AS source,
+    b.basin_id,
+    b.code AS basin_code,
+    b.name AS basin_name,
+    lr.run_time
+   FROM (((ts.basin_measurement bm
+     JOIN last_run lr ON ((lr.run_id = bm.run_id)))
+     JOIN ref.source s ON ((s.source_id = bm.source_id)))
+     JOIN geo.basin b ON ((b.basin_id = bm.basin_id)));"
+ts;v_dss_mapping_active;VIEW;" SELECT m.dss_mapping_id,
+    m.is_active,
+    m.match_type,
+    m.pathname_match,
+    m.priority,
+    m.part_a,
+    m.part_b,
+    m.part_c,
+    m.part_d,
+    m.part_e,
+    m.part_f,
+    st.code AS station_code,
+    st.name AS station_name,
+    v.code AS variable_code,
+    so.code AS source_code,
+    m.unit_hint,
+    m.notes,
+    m.created_at,
+    m.updated_at
+   FROM (((ref.dss_mapping m
+     JOIN geo.station st ON ((st.station_id = m.station_id)))
+     JOIN ref.variable v ON ((v.variable_id = m.variable_id)))
+     JOIN ref.source so ON ((so.source_id = m.source_id)))
+  WHERE (m.is_active IS TRUE);"
+ts;v_dss_mapping_health;VIEW;" WITH m AS (
+         SELECT dm.is_active,
+            dm.match_type,
+            dm.pathname_match,
+            dm.station_id,
+            st.code AS station_code,
+            st.name AS station_name,
+            v.code AS variable_code,
+            so.code AS source_code,
+            dm.unit_hint,
+            dm.priority
+           FROM (((ref.dss_mapping dm
+             JOIN geo.station st ON ((st.station_id = dm.station_id)))
+             JOIN ref.variable v ON ((v.variable_id = dm.variable_id)))
+             JOIN ref.source so ON ((so.source_id = dm.source_id)))
+        )
+ SELECT station_code,
+    station_name,
+    variable_code,
+    source_code,
+    count(*) FILTER (WHERE is_active) AS n_active_mappings,
+    min(priority) FILTER (WHERE is_active) AS best_priority,
+    bool_or(is_active) AS has_active
+   FROM m
+  GROUP BY station_code, station_name, variable_code, source_code;"

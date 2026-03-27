@@ -171,6 +171,27 @@ function pointPalette(mapType: ThematicMapType): any[] {
   if (mapType === "flood") {
     return ["interpolate", ["linear"], intensity, 0, "#93c5fd", 10, "#38bdf8", 20, "#0ea5e9", 35, "#0369a1"];
   }
+  if (mapType === "precip") {
+    return [
+      "interpolate",
+      ["linear"],
+      intensity,
+      0.1,
+      "#0ea53a",
+      2,
+      "#6ed40f",
+      5,
+      "#ffd000",
+      15,
+      "#ff7a00",
+      40,
+      "#ff2f2f",
+      90,
+      "#9b1dff",
+      170,
+      "#6a00ff",
+    ];
+  }
   return ["interpolate", ["linear"], intensity, 0, "#dbeafe", 10, "#f1f5f9", 20, "#ffffff", 35, "#e2e8f0"];
 }
 
@@ -190,6 +211,27 @@ function pointHeatmapColor(mapType: ThematicMapType): any[] {
       "rgba(29,78,216,0.85)",
       1,
       "rgba(23,37,84,0.95)",
+    ];
+  }
+  if (mapType === "precip") {
+    return [
+      "interpolate",
+      ["linear"],
+      ["heatmap-density"],
+      0,
+      "rgba(31,157,47,0)",
+      0.15,
+      "rgba(108,207,43,0.55)",
+      0.32,
+      "rgba(216,234,48,0.72)",
+      0.5,
+      "rgba(255,224,51,0.83)",
+      0.66,
+      "rgba(255,138,26,0.9)",
+      0.82,
+      "rgba(255,47,47,0.94)",
+      1,
+      "rgba(106,0,255,0.99)",
     ];
   }
 
@@ -293,6 +335,7 @@ export function ThematicMapViewer({ mapType, product, className }: ThematicMapVi
   const [mapError, setMapError] = useState<string | null>(null);
   const [layerStates, setLayerStates] = useState<Record<string, LayerState>>({});
   const [basemapId, setBasemapId] = useState<BasemapId>("satellite_labels");
+  const [precipRenderMode, setPrecipRenderMode] = useState<"mode1" | "mode2">("mode2");
   const [styleReadyTick, setStyleReadyTick] = useState(0);
 
   const clearThemedLayers = (map: maplibregl.Map) => {
@@ -397,6 +440,11 @@ export function ThematicMapViewer({ mapType, product, className }: ThematicMapVi
   }, [product?.id]);
 
   useEffect(() => {
+    if (mapType !== "precip") return;
+    setPrecipRenderMode("mode2");
+  }, [product?.id, mapType]);
+
+  useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded) return;
     if (!map.isStyleLoaded()) return;
@@ -413,25 +461,52 @@ export function ThematicMapViewer({ mapType, product, className }: ThematicMapVi
         const oid = outlineId(layer.id);
         const cfg = layerStates[layer.id] ?? { visible: layer.visible, opacity: layer.opacity };
         const visibility = cfg.visible ? "visible" : "none";
+        const precipUseCells = mapType === "precip" && precipRenderMode === "mode1";
+        const precipDataPath = precipUseCells ? (layer.alternate_asset_path ?? layer.asset_path) : layer.asset_path;
+        const layerData: any = layer.geojson ?? precipDataPath;
 
-        if (layer.source_type === "geojson" && layer.geojson) {
-          map.addSource(sid, { type: "geojson", data: layer.geojson as any });
+        if (layer.source_type === "geojson" && layerData) {
+          map.addSource(sid, { type: "geojson", data: layerData });
 
-          if (cfg.visible && layer.kind === "binary_mask") {
+          if (cfg.visible && layer.kind === "binary_mask" && layer.geojson) {
             focusBounds = mergeBounds(focusBounds, geoJsonBounds(layer.geojson));
           }
 
-          if (isPointCollection(layer.geojson)) {
+          const usePrecipHeatmap = mapType === "precip" && layer.kind === "vector" && precipRenderMode === "mode2";
+          if ((layer.geojson && isPointCollection(layer.geojson)) || usePrecipHeatmap) {
             map.addLayer({
               id: lid,
               type: "heatmap",
               source: sid,
               layout: { visibility },
               paint: {
-                "heatmap-weight": ["interpolate", ["linear"], ["coalesce", ["to-number", ["get", "intensity"]], 0], 0, 0.05, 35, 1],
-                "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 5, 0.6, 8, 1.0, 11, 1.25],
-                "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 5, 12, 8, 26, 11, 40],
-                "heatmap-opacity": Math.min(cfg.opacity + 0.08, 0.95),
+                "heatmap-weight":
+                  mapType === "precip"
+                    ? [
+                        "interpolate",
+                        ["linear"],
+                        ["coalesce", ["to-number", ["get", "mm"]], 0],
+                        0,
+                        0,
+                        2,
+                        0.18,
+                        5,
+                        0.32,
+                        10,
+                        0.46,
+                        20,
+                        0.62,
+                        40,
+                        0.78,
+                        90,
+                        0.92,
+                        170,
+                        1,
+                      ]
+                    : ["interpolate", ["linear"], ["coalesce", ["to-number", ["get", "intensity"]], 0], 0, 0.05, 35, 1],
+                "heatmap-intensity": mapType === "precip" ? ["interpolate", ["linear"], ["zoom"], 5, 0.9, 8, 1.25, 11, 1.55] : ["interpolate", ["linear"], ["zoom"], 5, 0.6, 8, 1.0, 11, 1.25],
+                "heatmap-radius": mapType === "precip" ? ["interpolate", ["linear"], ["zoom"], 5, 20, 8, 40, 11, 62] : ["interpolate", ["linear"], ["zoom"], 5, 12, 8, 26, 11, 40],
+                "heatmap-opacity": mapType === "precip" ? Math.min(cfg.opacity + 0.16, 0.96) : Math.min(cfg.opacity + 0.08, 0.95),
                 "heatmap-color": pointHeatmapColor(mapType),
               },
             });
@@ -443,21 +518,32 @@ export function ThematicMapViewer({ mapType, product, className }: ThematicMapVi
                 source: sid,
                 layout: { visibility },
                 paint: {
-                  "fill-color": pointPalette(mapType),
-                  "fill-opacity": Math.min(cfg.opacity + 0.08, 0.92),
-                  "fill-outline-color": mapType === "flood" ? "#0c4a6e" : "#475569",
+                  "fill-color":
+                    mapType === "precip"
+                      ? ["coalesce", ["get", "color"], "#1f9d2f"]
+                      : pointPalette(mapType),
+                  "fill-opacity": mapType === "precip" ? Math.min(cfg.opacity + 0.16, 0.98) : Math.min(cfg.opacity + 0.08, 0.92),
+                  "fill-antialias": !(mapType === "precip" && precipRenderMode === "mode1"),
+                  "fill-outline-color":
+                    mapType === "precip"
+                      ? ["coalesce", ["get", "color"], "#1f9d2f"]
+                      : mapType === "flood"
+                        ? "#0c4a6e"
+                        : "#475569",
                 },
               });
-              map.addLayer({
-                id: oid,
-                type: "line",
-                source: sid,
-                layout: { visibility },
-                paint: {
-                  "line-color": mapType === "flood" ? "#0c4a6e" : "#475569",
-                  "line-width": 1.2,
-                },
-              });
+              if (mapType !== "precip") {
+                map.addLayer({
+                  id: oid,
+                  type: "line",
+                  source: sid,
+                  layout: { visibility },
+                  paint: {
+                    "line-color": mapType === "flood" ? "#0c4a6e" : "#475569",
+                    "line-width": 1.2,
+                  },
+                });
+              }
             } else {
               map.addLayer({
                 id: lid,
@@ -465,7 +551,9 @@ export function ThematicMapViewer({ mapType, product, className }: ThematicMapVi
                 source: sid,
                 layout: { visibility },
                 paint: {
-                  "fill-color": (layer.paint?.fillColor as string) || (mapType === "flood" ? "#1d4ed8" : "#ffffff"),
+                  "fill-color":
+                    (layer.paint?.fillColor as string) ||
+                    (mapType === "flood" ? "#1d4ed8" : mapType === "precip" ? "#22c55e" : "#ffffff"),
                   "fill-opacity": cfg.opacity,
                 },
               });
@@ -514,7 +602,7 @@ export function ThematicMapViewer({ mapType, product, className }: ThematicMapVi
     } catch (error: any) {
       setMapError(error?.message || "Erreur d'affichage des couches.");
     }
-  }, [basemapId, layerStates, mapLoaded, mapType, product, styleReadyTick]);
+  }, [basemapId, layerStates, mapLoaded, mapType, precipRenderMode, product, styleReadyTick]);
 
   const legend = useMemo(() => {
     if (!product) return [];
@@ -539,7 +627,7 @@ export function ThematicMapViewer({ mapType, product, className }: ThematicMapVi
 
       <div className="absolute left-16 top-3 z-20 rounded-md border bg-background/90 px-3 py-1.5 shadow-sm backdrop-blur-sm">
         <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          {mapType === "flood" ? "Carte inondation" : "Carte neige"}
+          {mapType === "flood" ? "Carte inondation" : mapType === "snow" ? "Carte neige" : "Carte precipitation"}
         </div>
         <div className="text-xs font-medium">{product?.event_name ?? "Aucun produit"}</div>
       </div>
@@ -562,6 +650,31 @@ export function ThematicMapViewer({ mapType, product, className }: ThematicMapVi
       <div className="absolute right-3 top-3 z-20 max-h-[520px] w-[290px] overflow-auto rounded-lg border bg-background/95 p-3 shadow">
         <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Couches superposables</div>
         <div className="space-y-3">
+          {mapType === "precip" && (
+            <div className="rounded-md border p-2">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Mode d'affichage</div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPrecipRenderMode("mode1")}
+                  className={`rounded border px-2 py-1 text-xs font-medium ${
+                    precipRenderMode === "mode1" ? "border-[#0052CC] bg-[#0052CC] text-white" : "bg-slate-100 text-slate-700"
+                  }`}
+                >
+                  Mode 1
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPrecipRenderMode("mode2")}
+                  className={`rounded border px-2 py-1 text-xs font-medium ${
+                    precipRenderMode === "mode2" ? "border-[#0052CC] bg-[#0052CC] text-white" : "bg-slate-100 text-slate-700"
+                  }`}
+                >
+                  Mode 2
+                </button>
+              </div>
+            </div>
+          )}
           {(product?.layers ?? []).map((layer) => {
             const state = layerStates[layer.id] ?? { visible: layer.visible, opacity: layer.opacity };
             return (
@@ -608,6 +721,29 @@ export function ThematicMapViewer({ mapType, product, className }: ThematicMapVi
           })}
           {(product?.layers?.length ?? 0) === 0 && (
             <div className="rounded-md border p-2 text-xs text-muted-foreground">Aucun produit cartographique disponible pour ce filtre.</div>
+          )}
+
+          {mapType === "precip" && product && (
+            <div className="space-y-2 rounded-md border p-2">
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Echelle precipitations (mm)</div>
+              <div className="flex items-center gap-3">
+                <div
+                  className="h-36 w-4 rounded"
+                  style={{ background: "linear-gradient(0deg, #0ea53a 0%, #6ed40f 18%, #ffd000 40%, #ff7a00 58%, #ff2f2f 78%, #6a00ff 100%)" }}
+                />
+                <div className="space-y-1 text-[11px] text-muted-foreground">
+                  {[170, 120, 90, 60, 40, 30, 20, 15, 10, 5, 2, 0.5, 0.1].map((v) => (
+                    <div key={v}>{v} mm</div>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1 rounded border p-2 text-[11px]">
+                <div>Date: {new Date(product.acquisition_end).toLocaleString("fr-FR")}</div>
+                <div>Source: {product.meta?.source ?? "ECMWF"}</div>
+                <div>Resolution: {product.meta?.resolution ?? "0.1 deg - 24h"}</div>
+                <div>Raster: {product.meta?.tiff_file ?? "--"}</div>
+              </div>
+            </div>
           )}
         </div>
       </div>

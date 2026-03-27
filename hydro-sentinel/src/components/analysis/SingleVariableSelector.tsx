@@ -41,7 +41,18 @@ export function SingleVariableSelector({
   const defaultSources = useMemo(() => {
     if (!availableSources || availableSources.length === 0) return [];
     const codes = availableSources.map((s) => s.code);
-    if (codes.includes("OBS")) return ["OBS"];
+    const simulatedLike = codes.filter((code) =>
+      ["SIM", "HEC_HMS", "AROME", "ECMWF"].includes(code),
+    );
+    if (codes.includes("OBS")) {
+      if (simulatedLike.length > 0) {
+        return ["OBS", ...simulatedLike];
+      }
+      return ["OBS"];
+    }
+    if (simulatedLike.length > 0) {
+      return [simulatedLike[0]];
+    }
     return [codes[0]];
   }, [availableSources]);
 

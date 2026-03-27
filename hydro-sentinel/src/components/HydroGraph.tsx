@@ -131,7 +131,7 @@ export function HydroGraph({ stationId, variables }: HydroGraphProps) {
   return (
     <div className="h-full w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={chartData}>
+        <LineChart data={chartData} margin={{ top: 10, right: 32, left: 16, bottom: 24 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} />
           <XAxis 
             dataKey="time" 
@@ -140,6 +140,7 @@ export function HydroGraph({ stationId, variables }: HydroGraphProps) {
             angle={-45}
             textAnchor="end"
             height={60}
+            padding={{ left: 12, right: 28 }}
           />
           <YAxis tick={{fontSize: 10}} />
           <Tooltip 

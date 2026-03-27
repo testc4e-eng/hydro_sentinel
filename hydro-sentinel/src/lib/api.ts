@@ -50,21 +50,21 @@ export const api = Object.assign(axiosInstance, {
   getStations: (params: any) => axiosInstance.get('/stations', { params }),
 
   getRuns: (params: any) => axiosInstance.get('/measurements/runs', { params }),
-  getBasins: () => axiosInstance.get('/basins'),
+  getBasins: (params?: any) => axiosInstance.get('/basins', { params }),
   getDams: () => axiosInstance.get('/stations', { params: { type: 'barrage' } }), 
   getAlerts: (params: any) => axiosInstance.get('/alerts', { params }), 
   getCompare: (params: any) => axiosInstance.get('/measurements/compare', { params }),
   getKpis: (params: any) => axiosInstance.get('/map/points-kpi', { params }),
   getIngestions: () => axiosInstance.get('/ingestions'),
   getThematicMapCatalog: (
-    mapType: 'flood' | 'snow',
+    mapType: 'flood' | 'snow' | 'precip',
     params?: { event?: string; date_from?: string; date_to?: string }
   ) => axiosInstance.get(`/thematic-maps/${mapType}`, { params }).then((res) => res.data),
   getThematicMapHistory: (
-    mapType: 'flood' | 'snow',
+    mapType: 'flood' | 'snow' | 'precip',
     params?: { event?: string; date_from?: string; date_to?: string }
   ) => axiosInstance.get(`/thematic-maps/${mapType}/history`, { params }).then((res) => res.data),
-  getThematicMapProduct: (mapType: 'flood' | 'snow', productId: string) =>
+  getThematicMapProduct: (mapType: 'flood' | 'snow' | 'precip', productId: string) =>
     axiosInstance.get(`/thematic-maps/${mapType}/products/${productId}`).then((res) => res.data),
   
   // Ingestion API (Integrated)
@@ -105,6 +105,9 @@ export const api = Object.assign(axiosInstance, {
   deleteTimeSeriesAll: (variableCode: string, stationId: string) =>
     axiosInstance.delete(`/admin/timeseries/${variableCode}/${stationId}`),
   uploadTimeSeries: (formData: FormData) => axiosInstance.post('/admin/timeseries/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
+  uploadSpatialImport: (formData: FormData) => axiosInstance.post('/import/spatial', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
   analyzeTimeSeries: (formData: FormData) => axiosInstance.post('/admin/timeseries/analyze', formData, {
@@ -164,10 +167,11 @@ export const api = Object.assign(axiosInstance, {
       timeout: 15000,
     });
   },
-  downloadTemplateMultiBasin: (variableCode?: string, sourceCode?: string) => {
+  downloadTemplateMultiBasin: (variableCode?: string, sourceCode?: string, basinShape?: string) => {
     const params = new URLSearchParams();
     if (variableCode) params.append('variable_code', variableCode);
     if (sourceCode) params.append('source_code', sourceCode);
+    if (basinShape) params.append('basin_shape', basinShape);
     const query = params.toString();
     return axiosInstance.get(`/admin/templates/multi-bassin${query ? `?${query}` : ''}`, {
       responseType: 'blob',

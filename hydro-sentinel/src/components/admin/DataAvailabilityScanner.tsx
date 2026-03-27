@@ -8,6 +8,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Input } from "@/components/ui/input";
 import { Loader2, Download, RefreshCw, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { mapDgmBasinsFromScan } from "@/lib/dgmBasinAlignment";
 
 interface SourceAvailability {
   record_count: number;
@@ -82,6 +83,16 @@ interface DataAvailabilityReport {
   };
 }
 
+interface BasinApportRecapRow {
+  basin_id: string;
+  basin_name: string;
+  basin_code: string | null;
+  apport_journalier_mm3: number | null;
+  cumul_apport_mm3: number | null;
+  dernier_apport_horaire_mm3: number | null;
+  dernier_timestamp: string | null;
+}
+
 function joinUrl(base: string, prefix: string) {
   const b = base.replace(/\/+$/, "");
   const p = (prefix || "").startsWith("/") ? prefix : `/${prefix || ""}`;
@@ -126,6 +137,14 @@ function formatStep(seconds: number | null | undefined): string {
     return `${minutes} min`;
   }
   return `${seconds} s`;
+}
+
+function formatMm3(value: number | null | undefined, digits = 4): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return "-";
+  return Number(value).toLocaleString("fr-FR", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
 }
 
 type StationCategory = "barrage" | "station" | "other";
@@ -257,6 +276,7 @@ export function DataAvailabilityScanner() {
   const [dgmBasinEntities, setDgmBasinEntities] = useState<BasinEntityAvailability[]>([]);
   const [stationTypeFilter, setStationTypeFilter] = useState<StationCategory | "all">("all");
   const [stationDataFilter, setStationDataFilter] = useState<StationDataFilter>("all");
+  const [basinApportRecapRows, setBasinApportRecapRows] = useState<BasinApportRecapRow[]>([]);
   const { toast } = useToast();
 
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "";
@@ -270,13 +290,6 @@ export function DataAvailabilityScanner() {
 
   const stationEntities = useMemo(() => report?.station_entities ?? [], [report]);
   const basinEntities = useMemo(() => report?.basin_entities ?? [], [report]);
-  const normalizeText = (value: unknown): string =>
-    String(value ?? "")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase()
-      .trim();
-
   useEffect(() => {
     let cancelled = false;
     const loadDgmBasins = async () => {
@@ -288,39 +301,18 @@ export function DataAvailabilityScanner() {
         }
         const geojson = await response.json();
         const features = Array.isArray(geojson?.features) ? geojson.features : [];
-
-        const mapped = features.map((feature: any, index: number) => {
-          const props = feature?.properties ?? {};
-          const rawName =
-            props.name ??
-            props.nom ??
-            props.NOM ??
-            props.Name ??
-            props.Name1 ??
-            props.BASSIN ??
-            `Bassin DGM ${index + 1}`;
-          const rawCode = props.code ?? props.CODE ?? props.Code ?? props.id ?? props.ID ?? null;
-          const codeNorm = normalizeText(rawCode);
-          const nameNorm = normalizeText(rawName);
-          const matchedAbh = basinEntities.find((abh) => {
-            const abhCode = normalizeText(abh.basin_code);
-            const abhName = normalizeText(abh.basin_name);
-            return (codeNorm && abhCode && codeNorm === abhCode) || (nameNorm && abhName && nameNorm === abhName);
-          });
-
-          return {
-            basin_id: matchedAbh?.basin_id || `dgm-${index + 1}`,
-            basin_code: rawCode ? String(rawCode) : null,
-            basin_name: String(rawName),
-            level: matchedAbh?.level ?? null,
-            total_records: matchedAbh?.total_records ?? 0,
-            variable_count: matchedAbh?.variable_count ?? 0,
-            source_count: matchedAbh?.source_count ?? 0,
-            first_record: matchedAbh?.first_record ?? null,
-            last_record: matchedAbh?.last_record ?? null,
-            variables: matchedAbh?.variables ?? {},
-          } as BasinEntityAvailability;
-        });
+        const mapped = mapDgmBasinsFromScan(features, basinEntities as any, stationEntities as any).map((row) => ({
+          basin_id: row.basin_id || row.option_id,
+          basin_code: row.basin_code,
+          basin_name: row.basin_name,
+          level: row.level,
+          total_records: row.total_records,
+          variable_count: row.variable_count,
+          source_count: row.source_count,
+          first_record: row.first_record,
+          last_record: row.last_record,
+          variables: row.variables,
+        })) as BasinEntityAvailability[];
 
         if (!cancelled) setDgmBasinEntities(mapped);
       } catch {
@@ -331,12 +323,44 @@ export function DataAvailabilityScanner() {
     return () => {
       cancelled = true;
     };
-  }, [basinEntities]);
+  }, [basinEntities, stationEntities]);
 
   const basinEntitiesByShape = useMemo(
     () => (basinShape === "ABH" ? basinEntities : dgmBasinEntities),
     [basinEntities, basinShape, dgmBasinEntities],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadApportRecap = async () => {
+      try {
+        const res = await fetch(
+          `${apiRoot}/admin/data-availability/basins/apports-recap?shape=${encodeURIComponent(basinShape)}`,
+          { headers: { Accept: "application/json" } },
+        );
+        if (!res.ok) {
+          if (!cancelled) setBasinApportRecapRows([]);
+          return;
+        }
+        const payload = await res.json();
+        const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+        if (!cancelled) {
+          setBasinApportRecapRows(rows as BasinApportRecapRow[]);
+        }
+      } catch {
+        if (!cancelled) setBasinApportRecapRows([]);
+      }
+    };
+
+    if (!report) {
+      setBasinApportRecapRows([]);
+      return;
+    }
+    loadApportRecap();
+    return () => {
+      cancelled = true;
+    };
+  }, [apiRoot, basinShape, report]);
 
   const variableTimeStats = useMemo(() => report?.summary.variable_time_stats ?? [], [report]);
 
@@ -838,8 +862,11 @@ export function DataAvailabilityScanner() {
                           <p className="py-4 text-sm text-muted-foreground">Aucune station ne correspond au filtre.</p>
                         ) : (
                           <Accordion type="multiple" className="w-full">
-                            {filteredStationEntities.map((station) => (
-                              <AccordionItem key={station.station_id} value={station.station_id}>
+                            {filteredStationEntities.map((station, index) => (
+                              <AccordionItem
+                                key={`${station.station_id}-${station.station_code ?? "no-code"}-${index}`}
+                                value={`station-${station.station_id}-${index}`}
+                              >
                                 <AccordionTrigger className="hover:no-underline">
                                   <div className="flex w-full flex-col gap-2 pr-4 text-left md:flex-row md:items-center md:justify-between">
                                     <div>
@@ -909,13 +936,54 @@ export function DataAvailabilityScanner() {
                         onChange={(event) => setBasinFilter(event.target.value)}
                       />
 
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">Recap apports ({basinShape})</CardTitle>
+                          <CardDescription>
+                            apport (j) = SUM(flow_m3s * 3600 / 1 000 000) sur le dernier jour disponible,
+                            cumul apport = somme cumulative, apport (h) = derniere valeur horaire convertie.
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          {basinApportRecapRows.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">Aucune valeur de debit disponible pour calculer les apports.</p>
+                          ) : (
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Bassin</TableHead>
+                                  <TableHead className="text-right">apport (j) Mm3</TableHead>
+                                  <TableHead className="text-right">cumul apport Mm3</TableHead>
+                                  <TableHead className="text-right">apport (h) Mm3</TableHead>
+                                  <TableHead>Dernier point</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {basinApportRecapRows.map((row, index) => (
+                                  <TableRow key={`apport-recap-${row.basin_id}-${row.basin_code ?? "no-code"}-${index}`}>
+                                    <TableCell className="font-medium">{row.basin_name}</TableCell>
+                                    <TableCell className="text-right">{formatMm3(row.apport_journalier_mm3, 4)}</TableCell>
+                                    <TableCell className="text-right">{formatMm3(row.cumul_apport_mm3, 4)}</TableCell>
+                                    <TableCell className="text-right">{formatMm3(row.dernier_apport_horaire_mm3, 6)}</TableCell>
+                                    <TableCell>{formatDate(row.dernier_timestamp)}</TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          )}
+                        </CardContent>
+                      </Card>
+
                       <div className="rounded-md border px-4">
                         {filteredBasinEntities.length === 0 ? (
                           <p className="py-4 text-sm text-muted-foreground">Aucun bassin ne correspond au filtre.</p>
                         ) : (
                           <Accordion type="multiple" className="w-full">
-                            {filteredBasinEntities.map((basin) => (
-                              <AccordionItem key={basin.basin_id} value={basin.basin_id}>
+                            {filteredBasinEntities.map((basin, index) => (
+                              <AccordionItem
+                                key={`${basin.basin_id}-${basin.basin_code ?? "no-code"}-${basin.basin_name}-${index}`}
+                                value={`basin-${basin.basin_id}-${index}`}
+                              >
                                 <AccordionTrigger className="hover:no-underline">
                                   <div className="flex w-full flex-col gap-2 pr-4 text-left md:flex-row md:items-center md:justify-between">
                                     <div>

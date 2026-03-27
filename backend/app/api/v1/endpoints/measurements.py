@@ -16,8 +16,11 @@ router = APIRouter()
 VARIABLE_CODE_ALIASES = {
     "flow_m3s": ["flow_m3s", "debit_m3s"],
     "debit_m3s": ["debit_m3s", "flow_m3s"],
-    "inflow_m3s": ["inflow_m3s", "apport_m3s"],
-    "apport_m3s": ["apport_m3s", "inflow_m3s"],
+    # Business fallback:
+    # some SIM datasets have inflow_m3s fully NaN while flow_m3s is populated.
+    # Keep inflow/apport priority but transparently fall back to flow/debit for charts.
+    "inflow_m3s": ["inflow_m3s", "apport_m3s", "flow_m3s", "debit_m3s"],
+    "apport_m3s": ["apport_m3s", "inflow_m3s", "flow_m3s", "debit_m3s"],
 }
 
 
@@ -65,6 +68,89 @@ def _normalize_aggregation_mode(value: Optional[str]) -> str:
         status_code=400,
         detail="Invalid aggregation mode. Allowed values: raw, day",
     )
+
+
+@router.get("/availability-window")
+async def read_availability_window(
+    station_id: Optional[str] = None,
+    variable_code: Optional[str] = None,
+    source_code: Optional[str] = None,
+    entity_type: Optional[str] = "stations",
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    """
+    Return availability bounds (min/max/count) for one entity + variable + source.
+    Used by frontend to align displayed period with real available data.
+    """
+    if not station_id:
+        raise HTTPException(status_code=400, detail="station_id is required")
+    if not variable_code:
+        raise HTTPException(status_code=400, detail="variable_code is required")
+    if not source_code:
+        raise HTTPException(status_code=400, detail="source_code is required")
+
+    entity_kind = (entity_type or "stations").lower()
+    is_basin = entity_kind in {"basin", "basins", "bassin", "bassins"}
+    var_list = _expand_variable_aliases([variable_code])
+
+    params: dict[str, Any] = {
+        "station_id": station_id,
+        "source_code": source_code,
+    }
+
+    if is_basin:
+        var_placeholders = ",".join([f":var{i}" for i in range(len(var_list))])
+        for i, var in enumerate(var_list):
+            params[f"var{i}"] = var
+        query = text(
+            f"""
+            SELECT
+                COUNT(*)::bigint AS record_count,
+                MIN(m.time) AS first_record,
+                MAX(m.time) AS last_record
+            FROM ts.basin_measurement m
+            JOIN ref.variable v ON v.variable_id = m.variable_id
+            JOIN ref.source s ON s.source_id = m.source_id
+            WHERE m.basin_id = CAST(:station_id AS UUID)
+              AND v.code IN ({var_placeholders})
+              AND s.code = :source_code
+              AND m.value IS NOT NULL
+              AND m.value::double precision::text NOT IN ('NaN', 'Infinity', '-Infinity')
+            """
+        )
+    else:
+        var_placeholders = ",".join([f":var{i}" for i in range(len(var_list))])
+        for i, var in enumerate(var_list):
+            params[f"var{i}"] = var
+        query = text(
+            f"""
+            SELECT
+                COUNT(*)::bigint AS record_count,
+                MIN(time) AS first_record,
+                MAX(time) AS last_record
+            FROM api.v_timeseries_station
+            WHERE station_id = CAST(:station_id AS UUID)
+              AND variable_code IN ({var_placeholders})
+              AND source_code = :source_code
+              AND value IS NOT NULL
+              AND value::double precision::text NOT IN ('NaN', 'Infinity', '-Infinity')
+            """
+        )
+
+    row = (await db.execute(query, params)).mappings().first()
+    count = int(row["record_count"]) if row and row["record_count"] is not None else 0
+    first_record = row["first_record"] if row else None
+    last_record = row["last_record"] if row else None
+
+    return {
+        "station_id": station_id,
+        "entity_type": "bassins" if is_basin else "stations",
+        "variable_code": variable_code,
+        "source_code": source_code,
+        "count": count,
+        "first_record": first_record.isoformat() if first_record else None,
+        "last_record": last_record.isoformat() if last_record else None,
+    }
 
 @router.get("/timeseries", response_model=List[TimeseriesPoint])
 async def read_timeseries(

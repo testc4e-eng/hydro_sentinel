@@ -1,4 +1,4 @@
-export type ThematicMapType = "flood" | "snow";
+export type ThematicMapType = "flood" | "snow" | "precip";
 
 export interface SurfaceStat {
   m2: number;
@@ -28,6 +28,7 @@ export interface MapLayer {
   visible: boolean;
   opacity: number;
   asset_path?: string;
+  alternate_asset_path?: string;
   tiles?: string[];
   geojson?: Record<string, unknown>;
   paint?: Record<string, string | number | boolean>;
@@ -53,6 +54,16 @@ export interface ThematicMapProduct {
   bbox: [number, number, number, number];
   statistics: MapStatistics;
   layers: MapLayer[];
+  meta?: {
+    precip_mean_mm?: number;
+    precip_cum_mm?: number;
+    dominant_level?: string;
+    source?: string;
+    resolution?: string;
+    color_scale_min_mm?: number;
+    color_scale_max_mm?: number;
+    tiff_file?: string;
+  };
 }
 
 export interface ThematicMapProductSummary {

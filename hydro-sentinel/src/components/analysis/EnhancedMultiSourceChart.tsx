@@ -187,8 +187,50 @@ export function EnhancedMultiSourceChart({
       let fallbackRangeEndMs: number | undefined;
       const allowAutoFallback = !customPeriod.start && !customPeriod.end && Boolean(effectiveStartDate || effectiveEndDate);
       const sourceRowsMap = new Map<string, any[]>();
+      let alignedStartDate = effectiveStartDate;
+      let alignedEndDate = effectiveEndDate;
 
       try {
+        if (!customPeriod.start && !customPeriod.end) {
+          const availability = await Promise.all(
+            sources.map(async (source) => {
+              try {
+                const response = await api.get('/measurements/availability-window', {
+                  params: {
+                    station_id: stationId,
+                    variable_code: variableCode,
+                    source_code: source,
+                    entity_type: entityType,
+                  },
+                });
+                return response?.data ?? null;
+              } catch {
+                return null;
+              }
+            }),
+          );
+
+          const lastTimes = availability
+            .map((row: any) => parseIsoToMs(row?.last_record))
+            .filter((value): value is number => value !== undefined);
+          const firstTimes = availability
+            .map((row: any) => parseIsoToMs(row?.first_record))
+            .filter((value): value is number => value !== undefined);
+
+          const maxAvailableMs = lastTimes.length > 0 ? Math.max(...lastTimes) : undefined;
+          const minAvailableMs = firstTimes.length > 0 ? Math.min(...firstTimes) : undefined;
+          const requestedEndMs = parseIsoToMs(effectiveEndDate);
+
+          if (maxAvailableMs !== undefined) {
+            if (requestedEndMs === undefined || maxAvailableMs > requestedEndMs) {
+              alignedEndDate = new Date(maxAvailableMs).toISOString();
+            }
+          }
+          if (!alignedStartDate && minAvailableMs !== undefined) {
+            alignedStartDate = new Date(minAvailableMs).toISOString();
+          }
+        }
+
         for (const source of sources) {
           const params: any = {
             station_id: stationId,
@@ -197,8 +239,8 @@ export function EnhancedMultiSourceChart({
             entity_type: entityType,
           };
 
-            if (effectiveStartDate) params.start = effectiveStartDate;
-            if (effectiveEndDate) params.end = effectiveEndDate;
+            if (alignedStartDate) params.start = alignedStartDate;
+            if (alignedEndDate) params.end = alignedEndDate;
 
           try {
             const response = await api.get('/measurements/timeseries', { params });
@@ -234,8 +276,8 @@ export function EnhancedMultiSourceChart({
 
               const selectedFallback = selectFallbackWindowRows(
                 fallbackRows,
-                effectiveStartDate,
-                effectiveEndDate,
+                alignedStartDate,
+                alignedEndDate,
               );
               sourceRowsMap.set(source, selectedFallback.rows);
               fallbackUsed = true;
@@ -283,20 +325,19 @@ export function EnhancedMultiSourceChart({
           });
         }
 
-        if (timeMap.size > 0) {
-          if (fallbackUsed) {
-            addBoundaryPoint(
-              timeMap,
-              fallbackRangeStartMs !== undefined ? new Date(fallbackRangeStartMs).toISOString() : undefined,
-            );
-            addBoundaryPoint(
-              timeMap,
-              fallbackRangeEndMs !== undefined ? new Date(fallbackRangeEndMs).toISOString() : undefined,
-            );
-          } else {
-            addBoundaryPoint(timeMap, effectiveStartDate);
-            addBoundaryPoint(timeMap, effectiveEndDate);
-          }
+        if (fallbackUsed) {
+          addBoundaryPoint(
+            timeMap,
+            fallbackRangeStartMs !== undefined ? new Date(fallbackRangeStartMs).toISOString() : undefined,
+          );
+          addBoundaryPoint(
+            timeMap,
+            fallbackRangeEndMs !== undefined ? new Date(fallbackRangeEndMs).toISOString() : undefined,
+          );
+        } else {
+          // Keep explicit requested/custom range visible even if no data exists inside.
+          addBoundaryPoint(timeMap, alignedStartDate);
+          addBoundaryPoint(timeMap, alignedEndDate);
         }
 
         const merged = Array.from(timeMap.values());
@@ -401,49 +442,22 @@ export function EnhancedMultiSourceChart({
       return normalizedRows;
     }
 
-    const segments = new Map<string, { start: number; end: number }>();
-    let cursor = 0;
-
-    for (let i = 0; i < orderedContinuitySources.length; i += 1) {
-      const source = orderedContinuitySources[i];
-
-      let start = -1;
-      for (let idx = cursor; idx < normalizedRows.length; idx += 1) {
-        if (typeof normalizedRows[idx][source] === 'number') {
-          start = idx;
-          break;
-        }
-      }
-
-      if (start === -1) continue;
-
-      let nextStart = -1;
-      for (let j = i + 1; j < orderedContinuitySources.length && nextStart === -1; j += 1) {
-        const nextSource = orderedContinuitySources[j];
-        for (let idx = start + 1; idx < normalizedRows.length; idx += 1) {
-          if (typeof normalizedRows[idx][nextSource] === 'number') {
-            nextStart = idx;
-            break;
-          }
-        }
-      }
-
-      const end = nextStart === -1 ? normalizedRows.length - 1 : nextStart - 1;
-      segments.set(source, { start, end });
-      cursor = nextStart === -1 ? normalizedRows.length : nextStart;
-    }
-
-    return normalizedRows.map((point, index) => {
+    return normalizedRows.map((point) => {
       const segmented: TimeseriesData = {
         time: point.time,
         displayTime: point.displayTime,
       };
 
+      let activeSource: string | null = null;
+      for (const source of orderedContinuitySources) {
+        if (typeof point[source] === 'number') {
+          activeSource = source;
+          break;
+        }
+      }
+
       sources.forEach((source) => {
-        const value = point[source];
-        const segment = segments.get(source);
-        const inSegment = segment && index >= segment.start && index <= segment.end;
-        segmented[source] = inSegment && typeof value === 'number' ? value : null;
+        segmented[source] = activeSource === source && typeof point[source] === 'number' ? (point[source] as number) : null;
       });
 
       return segmented;
@@ -639,9 +653,14 @@ export function EnhancedMultiSourceChart({
 
       <div ref={chartWrapperRef} className="h-[400px] w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <ChartComponent data={processedChartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+          <ChartComponent data={processedChartData} margin={{ top: 8, right: 32, left: 16, bottom: 24 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis dataKey="displayTime" tick={{ fontSize: 11 }} stroke="#6b7280" />
+            <XAxis
+              dataKey="displayTime"
+              tick={{ fontSize: 11 }}
+              stroke="#6b7280"
+              padding={{ left: 12, right: 28 }}
+            />
             <YAxis
               scale={logScale ? 'log' : 'auto'}
               domain={yDomain}
@@ -683,7 +702,7 @@ export function EnhancedMultiSourceChart({
                   dot={false}
                   strokeWidth={2}
                   strokeDasharray={strokeDasharray}
-                  connectNulls
+                  connectNulls={!continuityEnabled}
                 />
               );
             })}

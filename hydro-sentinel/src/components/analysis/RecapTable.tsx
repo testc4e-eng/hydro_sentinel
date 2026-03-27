@@ -17,21 +17,9 @@ export interface RecapTableRow {
 interface RecapTableProps {
   barrageId?: string;
   barrageName: string;
-  periode: string;
-  dateFin: string;
 }
 
-function parsePeriodeToDays(periode: string): number {
-  const normalized = String(periode || "").toLowerCase().trim();
-  if (normalized === "24h") return 1;
-  if (normalized === "72h") return 3;
-  if (normalized === "7d") return 7;
-  if (normalized === "14d") return 14;
-  if (normalized === "30d") return 30;
-  const parsed = Number.parseInt(normalized.replace(/[^\d]/g, ""), 10);
-  if (Number.isFinite(parsed)) return Math.max(1, parsed);
-  return 14;
-}
+const DEFAULT_HISTORY_DAYS = 5;
 
 function formatDay(dateInput: Date): string {
   const dd = String(dateInput.getDate()).padStart(2, "0");
@@ -60,12 +48,11 @@ function formatCellValue(value: number | null | undefined): string {
   return value.toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 
-export function RecapTable({ barrageId, barrageName, periode, dateFin }: RecapTableProps) {
-  const daysCount = useMemo(() => parsePeriodeToDays(periode), [periode]);
+export function RecapTable({ barrageId, barrageName }: RecapTableProps) {
   const [apiRows, setApiRows] = useState<RecapTableRow[]>([]);
 
   useEffect(() => {
-    if (!barrageId || !dateFin) {
+    if (!barrageId) {
       setApiRows([]);
       return;
     }
@@ -73,24 +60,28 @@ export function RecapTable({ barrageId, barrageName, periode, dateFin }: RecapTa
     let cancelled = false;
     const load = async () => {
       try {
-        const response = await api.get("/recapitulatif/barrage", {
+        const response = await api.get("/recap/barrage", {
           params: {
             barrage_id: barrageId,
-            date_fin: dateFin,
-            nb_jours: daysCount,
+            full_period: true,
+            source: "SIM",
           },
         });
 
-        const rows = Array.isArray(response.data) ? response.data : [];
+        const rows = Array.isArray(response.data)
+          ? response.data
+          : Array.isArray(response.data?.donnees)
+            ? response.data.donnees
+            : [];
         const mapped: RecapTableRow[] = rows.map((row: any) => ({
           date: row?.jour,
-          pluieMm: row?.pluie_moy,
-          retenueMm3: row?.retenue_actuelle,
-          apportsMm3: row?.apports,
-          creuxMm3: row?.creux_actuel,
-          restitutionMm3: row?.restitutions,
-          debitMaxM3s: row?.debit_max,
-          debitMoyenJournalierM3s: row?.debit_moy_j,
+          pluieMm: row?.pluie_moy_mm ?? row?.pluie_moy,
+          retenueMm3: row?.retenue_mm3 ?? row?.retenue_actuelle,
+          apportsMm3: row?.apports_mm3 ?? row?.apports,
+          creuxMm3: row?.creux_mm3 ?? row?.creux_actuel,
+          restitutionMm3: row?.lacher_mm3 ?? row?.restitutions,
+          debitMaxM3s: row?.debit_max_m3s ?? row?.debit_max,
+          debitMoyenJournalierM3s: row?.debit_moy_m3s ?? row?.debit_moy_j,
         }));
 
         if (!cancelled) {
@@ -107,33 +98,36 @@ export function RecapTable({ barrageId, barrageName, periode, dateFin }: RecapTa
     return () => {
       cancelled = true;
     };
-  }, [barrageId, dateFin, daysCount]);
+  }, [barrageId]);
 
   const tableRows = useMemo(() => {
-    if (apiRows.length > 0) {
-      const sorted = [...apiRows].sort((a, b) => {
-        const da = parseDateLike(a.date)?.getTime() ?? 0;
-        const db = parseDateLike(b.date)?.getTime() ?? 0;
-        return da - db;
-      });
-      return sorted.map((row) => ({
+    const windowStart = new Date();
+    windowStart.setHours(0, 0, 0, 0);
+    windowStart.setDate(windowStart.getDate() - DEFAULT_HISTORY_DAYS);
+
+    const sorted = [...apiRows].sort((a, b) => {
+      const da = parseDateLike(a.date)?.getTime() ?? 0;
+      const db = parseDateLike(b.date)?.getTime() ?? 0;
+      return da - db;
+    });
+
+    return sorted
+      .filter((row) => {
+        const parsed = parseDateLike(row.date);
+        if (!parsed) return false;
+        parsed.setHours(0, 0, 0, 0);
+        return parsed.getTime() >= windowStart.getTime();
+      })
+      .map((row) => ({
         ...row,
         date: parseDateLike(row.date) ? formatDay(parseDateLike(row.date) as Date) : row.date ?? "-",
       }));
-    }
-
-    const out: RecapTableRow[] = [];
-    const end = parseDateLike(dateFin) ?? new Date();
-    for (let i = daysCount - 1; i >= 0; i -= 1) {
-      const d = new Date(end);
-      d.setDate(end.getDate() - i);
-      out.push({ date: formatDay(d) });
-    }
-    return out;
-  }, [apiRows, dateFin, daysCount]);
+  }, [apiRows]);
 
   const latestDateForTitle = useMemo(() => {
-    if (tableRows.length === 0) return formatDay(new Date());
+    if (tableRows.length === 0) {
+      return formatDay(new Date());
+    }
     const last = tableRows[tableRows.length - 1];
     return last?.date || formatDay(new Date());
   }, [tableRows]);
@@ -178,6 +172,13 @@ export function RecapTable({ barrageId, barrageName, periode, dateFin }: RecapTa
             </tr>
           </thead>
           <tbody>
+            {tableRows.length === 0 && (
+              <tr>
+                <td className="border border-gray-300 px-2 py-4 text-center text-sm text-gray-600" colSpan={8}>
+                  Aucune donnée disponible pour cette période
+                </td>
+              </tr>
+            )}
             {tableRows.map((row, idx) => (
               <tr key={`recap-row-${idx}`} className={idx % 2 === 0 ? "bg-white" : "bg-[#F5F5F5]"}>
                 <td className="border border-gray-300 px-2 py-1.5 text-left">{row.date || "-"}</td>
@@ -190,16 +191,18 @@ export function RecapTable({ barrageId, barrageName, periode, dateFin }: RecapTa
                 <td className="border border-gray-300 px-2 py-1.5 text-right">{formatCellValue(row.debitMoyenJournalierM3s)}</td>
               </tr>
             ))}
-            <tr className="bg-gray-300 font-bold">
-              <td className="border border-gray-300 px-2 py-1.5 text-left">Total</td>
-              <td className="border border-gray-300 px-2 py-1.5 text-right">{formatCellValue(totals.pluieMm)}</td>
-              <td className="border border-gray-300 px-2 py-1.5 text-right" />
-              <td className="border border-gray-300 px-2 py-1.5 text-right">{formatCellValue(totals.apportsMm3)}</td>
-              <td className="border border-gray-300 px-2 py-1.5 text-right" />
-              <td className="border border-gray-300 px-2 py-1.5 text-right">{formatCellValue(totals.restitutionMm3)}</td>
-              <td className="border border-gray-300 px-2 py-1.5 text-right" />
-              <td className="border border-gray-300 px-2 py-1.5 text-right" />
-            </tr>
+            {tableRows.length > 0 && (
+              <tr className="bg-gray-300 font-bold">
+                <td className="border border-gray-300 px-2 py-1.5 text-left">Total</td>
+                <td className="border border-gray-300 px-2 py-1.5 text-right">{formatCellValue(totals.pluieMm)}</td>
+                <td className="border border-gray-300 px-2 py-1.5 text-right" />
+                <td className="border border-gray-300 px-2 py-1.5 text-right">{formatCellValue(totals.apportsMm3)}</td>
+                <td className="border border-gray-300 px-2 py-1.5 text-right" />
+                <td className="border border-gray-300 px-2 py-1.5 text-right">{formatCellValue(totals.restitutionMm3)}</td>
+                <td className="border border-gray-300 px-2 py-1.5 text-right" />
+                <td className="border border-gray-300 px-2 py-1.5 text-right" />
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

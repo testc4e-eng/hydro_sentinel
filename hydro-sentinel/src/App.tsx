@@ -17,6 +17,7 @@ import Import from "./pages/Import";
 import DataScan from "./pages/DataScan";
 import DataManagement from "./pages/DataManagement";
 import Settings from "./pages/Settings";
+import Alerts from "./pages/Alerts";
 
 import RecapBarrage from "./pages/RecapBarrage";
 import Volume from "./pages/Volume";
@@ -57,6 +58,7 @@ const App = () => (
             <Route path="/volume" element={<Volume />} />
             <Route path="/volume/barrage" element={<Volume />} />
             <Route path="/recap-barrage" element={<RecapBarrage />} />
+            <Route path="/alertes" element={<Alerts />} />
             <Route path="/carte-synthese" element={<ThematicDashboard />} />
             <Route path="/carte-inondation" element={<Navigate to="/carte-synthese?type=flood" replace />} />
             <Route path="/carte-couverture-neige" element={<Navigate to="/carte-synthese?type=snow" replace />} />

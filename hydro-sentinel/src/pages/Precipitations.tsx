@@ -13,6 +13,7 @@ import { CompactFilterBar, defaultCompactFilters, type CompactFilters } from "@/
 import { useStations, useSources, useBasins, useDams } from "@/hooks/useApi";
 import { exportToCSV } from "@/lib/exportUtils";
 import { api } from "@/lib/api";
+import { mapDgmBasinsFromScan, type BasinEntityAvailability, type StationEntityAvailability } from "@/lib/dgmBasinAlignment";
 import { BarChart3, LayoutGrid, LineChart } from "lucide-react";
 import { ResponsiveContainer, BarChart as RechartsBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import * as XLSX from "xlsx";
@@ -36,6 +37,13 @@ type BasinCumulRow = {
   min: number;
   max: number;
   nbStations?: number;
+};
+
+type BasinOption = {
+  id: string;
+  name: string;
+  code?: string | null;
+  queryBasinId: string;
 };
 
 const format1 = (value: number) => value.toFixed(1);
@@ -67,7 +75,7 @@ export default function Precipitations() {
   const [selectedStationId, setSelectedStationId] = useState<string>("");
   const [selectedBasinId, setSelectedBasinId] = useState<string>("");
   const [selectedShape, setSelectedShape] = useState<"DGM" | "ABH">("ABH");
-  const [localDgmBasins, setLocalDgmBasins] = useState<any[]>([]);
+  const [dgmBasinOptions, setDgmBasinOptions] = useState<BasinOption[]>([]);
 
   const [variableSelection, setVariableSelection] = useState<VariableSourceSelection>({
     variableCode: "precip_mm",
@@ -91,30 +99,22 @@ export default function Precipitations() {
   const availableStations = allStations;
 
   const allBasins = basinsResult?.data ?? [];
-  const normalizeText = (value: unknown) =>
-    String(value ?? "")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase()
-      .trim();
-  const availableBasins = useMemo(() => {
-    if (!isBasinView || selectedShape === "ABH") return allBasins;
+  const abhBasinOptions = useMemo<BasinOption[]>(
+    () =>
+      allBasins.map((b: any) => ({
+        id: String(b.id),
+        name: String(b.name),
+        code: b.code ?? null,
+        queryBasinId: String(b.id),
+      })),
+    [allBasins],
+  );
 
-    return localDgmBasins.map((b: any, index: number) => {
-      const nameNorm = normalizeText(b?.name);
-      const codeNorm = normalizeText(b?.code);
-      const matched = allBasins.find((abh: any) => {
-        const abhName = normalizeText(abh?.name);
-        const abhCode = normalizeText(abh?.code);
-        return (codeNorm && abhCode && codeNorm === abhCode) || (nameNorm && abhName && nameNorm === abhName);
-      });
-      return {
-        id: matched?.id || `dgm-${index + 1}`,
-        name: b?.name || `Bassin DGM ${index + 1}`,
-        code: b?.code || null,
-      };
-    });
-  }, [isBasinView, selectedShape, allBasins, localDgmBasins]);
+  const availableBasins = useMemo<BasinOption[]>(() => {
+    if (!isBasinView) return abhBasinOptions;
+    if (selectedShape === "DGM") return dgmBasinOptions;
+    return abhBasinOptions;
+  }, [isBasinView, selectedShape, abhBasinOptions, dgmBasinOptions]);
   const availableDams = useMemo(
     () => ((damsResult?.data ?? []) as any[]).filter((s: any) => String(s?.type || "").toLowerCase() === "barrage"),
     [damsResult],
@@ -132,7 +132,11 @@ export default function Precipitations() {
   }, [availableStations, selectedStationId]);
 
   useEffect(() => {
-    if (!isBasinView || availableBasins.length === 0) return;
+    if (!isBasinView) return;
+    if (availableBasins.length === 0) {
+      if (selectedBasinId) setSelectedBasinId("");
+      return;
+    }
     const exists = availableBasins.some((b: any) => b.id === selectedBasinId);
     if (!selectedBasinId || !exists) {
       setSelectedBasinId(availableBasins[0].id);
@@ -141,33 +145,37 @@ export default function Precipitations() {
 
   useEffect(() => {
     let cancelled = false;
-    const loadDgmBasins = async () => {
+    const loadDgmBasinsForPrecip = async () => {
       try {
-        const response = await fetch(`/data/basins_dgm.geojson?v=${Date.now()}`);
-        if (!response.ok) return;
-        const geojson = await response.json();
+        const [reportRes, geojsonRes] = await Promise.all([
+          api.get("/admin/data-availability", { params: { include_time_stats: false } }),
+          fetch(`/data/basins_dgm.geojson?v=${Date.now()}`),
+        ]);
+        if (!geojsonRes.ok) {
+          if (!cancelled) setDgmBasinOptions([]);
+          return;
+        }
+        const report = reportRes?.data ?? {};
+        const basinEntities = (Array.isArray(report?.basin_entities) ? report.basin_entities : []) as BasinEntityAvailability[];
+        const stationEntities = (Array.isArray(report?.station_entities) ? report.station_entities : []) as StationEntityAvailability[];
+        const geojson = await geojsonRes.json();
         const features = Array.isArray(geojson?.features) ? geojson.features : [];
-        const mapped = features.map((feature: any, index: number) => {
-          const props = feature?.properties ?? {};
-          return {
-            id: `dgm-local-${index + 1}`,
-            name:
-              props.name ??
-              props.nom ??
-              props.NOM ??
-              props.Name ??
-              props.Name1 ??
-              props.BASSIN ??
-              `Bassin DGM ${index + 1}`,
-            code: props.code ?? props.CODE ?? props.Code ?? props.id ?? props.ID ?? null,
-          };
-        });
-        if (!cancelled) setLocalDgmBasins(mapped);
+
+        const mapped = mapDgmBasinsFromScan(features, basinEntities, stationEntities)
+          .filter((row) => !!row.basin_id)
+          .map((row) => ({
+            id: row.option_id,
+            name: row.basin_name,
+            code: row.basin_code,
+            queryBasinId: row.basin_id,
+          })) as BasinOption[];
+
+        if (!cancelled) setDgmBasinOptions(mapped);
       } catch {
-        if (!cancelled) setLocalDgmBasins([]);
+        if (!cancelled) setDgmBasinOptions([]);
       }
     };
-    loadDgmBasins();
+    loadDgmBasinsForPrecip();
     return () => {
       cancelled = true;
     };
@@ -221,7 +229,7 @@ export default function Precipitations() {
   };
 
   const continuityAvailable = variableSelection.sources.length > 1;
-  const continuityActive = !isBasinView && continuityAvailable && continuityEnabled;
+  const continuityActive = continuityAvailable && continuityEnabled;
 
   const handleExport = () => {
     const st = availableStations.find((s) => s.id === selectedStationId);
@@ -231,6 +239,7 @@ export default function Precipitations() {
 
   const st = availableStations.find((s) => s.id === selectedStationId);
   const basin = availableBasins.find((b: any) => b.id === selectedBasinId);
+  const selectedBasinQueryId = basin?.queryBasinId || "";
   const currentEntityName = isBasinView ? basin?.name : st?.name;
 
   const dateRange = useMemo(() => {
@@ -295,6 +304,9 @@ export default function Precipitations() {
     const map: Record<string, string> = {};
     availableBasins.forEach((b: any) => {
       map[b.id] = b.name;
+      if (b.queryBasinId) {
+        map[b.queryBasinId] = b.name;
+      }
     });
     return map;
   }, [availableBasins]);
@@ -302,28 +314,75 @@ export default function Precipitations() {
   useEffect(() => {
     let cancelled = false;
 
+    const continuityPriority = continuityOrder.filter((src) => variableSelection.sources.includes(src));
+    const fallbackPriority = variableSelection.sources.filter((src) => !continuityPriority.includes(src));
+    const sourcePriority = [...continuityPriority, ...fallbackPriority];
+
+    const fetchEntitySeries = async (
+      entityType: "stations" | "bassins",
+      entityId: string,
+      sourceCode: string,
+    ) => {
+      const response = await api.get("/measurements/timeseries", {
+        params: {
+          station_id: entityId,
+          variable_code: variableSelection.variableCode,
+          source_code: sourceCode,
+          entity_type: entityType,
+          start: dateRange.start,
+          end: dateRange.end,
+        },
+      });
+      return Array.isArray(response.data) ? response.data : [];
+    };
+
+    const extractValues = (points: any[]) =>
+      points
+        .map((point: any) => Number(point?.value))
+        .filter((value: number) => Number.isFinite(value));
+
+    const mergeContinuityValues = (seriesBySource: Record<string, any[]>) => {
+      const chosenByTime = new Map<string, number>();
+      sourcePriority.forEach((sourceCode) => {
+        const points = seriesBySource[sourceCode] || [];
+        points.forEach((point: any) => {
+          const timeKey = String(point?.time || "");
+          const value = Number(point?.value);
+          if (!timeKey || !Number.isFinite(value)) return;
+          if (!chosenByTime.has(timeKey)) {
+            chosenByTime.set(timeKey, value);
+          }
+        });
+      });
+      return Array.from(chosenByTime.values());
+    };
+
+    const fetchValuesForEntity = async (
+      entityType: "stations" | "bassins",
+      entityId: string,
+    ): Promise<number[]> => {
+      if (continuityActive && sourcePriority.length > 1) {
+        const seriesBySource: Record<string, any[]> = {};
+        await Promise.all(
+          sourcePriority.map(async (sourceCode) => {
+            seriesBySource[sourceCode] = await fetchEntitySeries(entityType, entityId, sourceCode);
+          }),
+        );
+        return mergeContinuityValues(seriesBySource);
+      }
+
+      const points = await fetchEntitySeries(entityType, entityId, primarySummarySource);
+      return extractValues(points);
+    };
+
     const computeStatsForStations = async (stationIds: string[]) => {
       if (stationIds.length === 0) return { cumul: 0, moyenne: 0, min: 0, max: 0 };
 
       const responses = await Promise.all(
-        stationIds.map((stationId) =>
-          api.get("/measurements/timeseries", {
-            params: {
-              station_id: stationId,
-              variable_code: variableSelection.variableCode,
-              source_code: primarySummarySource,
-              entity_type: "stations",
-              start: dateRange.start,
-              end: dateRange.end,
-            },
-          }),
-        ),
+        stationIds.map((stationId) => fetchValuesForEntity("stations", stationId)),
       );
 
-      const values = responses
-        .flatMap((response) => (Array.isArray(response.data) ? response.data : []))
-        .map((point: any) => Number(point?.value))
-        .filter((value: number) => Number.isFinite(value));
+      const values = responses.flatMap((entityValues) => entityValues);
 
       if (values.length === 0) return { cumul: 0, moyenne: 0, min: 0, max: 0 };
 
@@ -337,20 +396,7 @@ export default function Precipitations() {
     };
 
     const computeStatsForBasin = async (basinId: string) => {
-      const response = await api.get("/measurements/timeseries", {
-        params: {
-          station_id: basinId,
-          variable_code: variableSelection.variableCode,
-          source_code: primarySummarySource,
-          entity_type: "bassins",
-          start: dateRange.start,
-          end: dateRange.end,
-        },
-      });
-
-      const values = (Array.isArray(response.data) ? response.data : [])
-        .map((point: any) => Number(point?.value))
-        .filter((value: number) => Number.isFinite(value));
+      const values = await fetchValuesForEntity("bassins", basinId);
 
       if (values.length === 0) return { cumul: 0, moyenne: 0, min: 0, max: 0 };
 
@@ -367,9 +413,14 @@ export default function Precipitations() {
       setCumulLoading(true);
       try {
         if (isBasinView) {
+          const statsByQueryBasinId = new Map<string, { cumul: number; moyenne: number; min: number; max: number }>();
           const rows = await Promise.all(
             availableBasins.map(async (b: any) => {
-              const stats = await computeStatsForBasin(b.id);
+              const queryBasinId = b.queryBasinId || b.id;
+              if (!statsByQueryBasinId.has(queryBasinId)) {
+                statsByQueryBasinId.set(queryBasinId, await computeStatsForBasin(queryBasinId));
+              }
+              const stats = statsByQueryBasinId.get(queryBasinId) ?? { cumul: 0, moyenne: 0, min: 0, max: 0 };
               return {
                 id: b.id,
                 label: b.name,
@@ -377,7 +428,7 @@ export default function Precipitations() {
                 moyenne: stats.moyenne,
                 min: stats.min,
                 max: stats.max,
-                nbStations: stationCountByBasinId[b.id] || 0,
+                nbStations: stationCountByBasinId[queryBasinId] || 0,
               } as BasinCumulRow;
             }),
           );
@@ -441,6 +492,9 @@ export default function Precipitations() {
     dateRange.end,
     dateRange.start,
     primarySummarySource,
+    continuityActive,
+    continuityOrder,
+    variableSelection.sources,
     stationCountByBasinId,
     variableSelection.variableCode,
   ]);
@@ -577,6 +631,11 @@ export default function Precipitations() {
           sourceLabelOverrides={PRECIP_SOURCE_LABELS}
         />
       </div>
+      {isBasinView && selectedShape === "DGM" && dgmBasinOptions.length === 0 && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Aucun bassin DGM aligne avec le Scan des donnees (SHP + mapping) n&apos;a ete trouve.
+        </div>
+      )}
 
       <SingleVariableSelector
         onSelectionChange={setVariableSelection}
@@ -594,7 +653,7 @@ export default function Precipitations() {
               {variableSelection.variableLabel} - {currentEntityName || "..."}
             </CardTitle>
             <div className="flex items-center gap-2">
-              {viewMode === "graph" && !isBasinView && (
+              {viewMode === "graph" && (
                 <div className="flex items-center gap-2 mr-2">
                   <div className="flex items-center border rounded-md p-0.5 bg-muted/50">
                     <Button
@@ -666,7 +725,7 @@ export default function Precipitations() {
               )}
 
               <EnhancedMultiSourceChart
-                stationId={isBasinView ? selectedBasinId : selectedStationId}
+                stationId={isBasinView ? selectedBasinQueryId : selectedStationId}
                 variableCode={variableSelection.variableCode}
                 variableLabel={variableSelection.variableLabel}
                 unit={variableSelection.unit}
@@ -679,6 +738,11 @@ export default function Precipitations() {
                 continuityPriority={continuityOrder}
                 onDataLoaded={setChartData}
               />
+              {isBasinView && selectedShape === "DGM" && selectedBasinId && chartData.length === 0 && (
+                <div className="text-xs text-muted-foreground">
+                  Aucune valeur disponible pour ce bassin DGM sur la periode et les sources selectionnees.
+                </div>
+              )}
             </div>
           ) : (
             <DataTable
@@ -787,7 +851,7 @@ export default function Precipitations() {
           ) : (
             <div ref={cumulGraphRef} className="h-[360px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <RechartsBarChart data={sortedCumulRows} margin={{ top: 12, right: 20, left: 0, bottom: 64 }}>
+                <RechartsBarChart data={sortedCumulRows} margin={{ top: 12, right: 32, left: 16, bottom: 72 }}>
                   <defs>
                     <linearGradient id="cumulBlueGradient" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#3B82F6" />
@@ -795,7 +859,7 @@ export default function Precipitations() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="label" angle={-20} textAnchor="end" interval={0} height={70} tick={{ fontSize: 11 }} />
+                  <XAxis dataKey="label" angle={-20} textAnchor="end" interval={0} height={70} tick={{ fontSize: 11 }} padding={{ left: 12, right: 28 }} />
                   <YAxis tick={{ fontSize: 11 }} label={{ value: "mm", angle: -90, position: "insideLeft" }} />
                   <Tooltip
                     formatter={(value: any, name: any, payload: any) => {

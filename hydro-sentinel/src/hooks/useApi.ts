@@ -95,7 +95,7 @@ export function useThematicMapCatalog(
   return useQuery<ThematicMapCatalog>({
     queryKey: ["thematic-map-catalog", mapType, params],
     queryFn: async () => {
-      if (thematicDemoOnly) {
+      if (thematicDemoOnly || mapType === "precip") {
         return getFallbackCatalog(mapType, params);
       }
       return await api.getThematicMapCatalog(mapType, params);
@@ -111,7 +111,7 @@ export function useThematicMapHistory(
   return useQuery<ThematicMapProductSummary[]>({
     queryKey: ["thematic-map-history", mapType, params],
     queryFn: async () => {
-      if (thematicDemoOnly) {
+      if (thematicDemoOnly || mapType === "precip") {
         return getFallbackHistory(mapType, params);
       }
       return await api.getThematicMapHistory(mapType, params);
@@ -125,7 +125,7 @@ export function useThematicMapProduct(mapType: ThematicMapType, productId: strin
     queryKey: ["thematic-map-product", mapType, productId],
     queryFn: async () => {
       const targetId = productId as string;
-      if (thematicDemoOnly) {
+      if (thematicDemoOnly || mapType === "precip") {
         return getFallbackProduct(mapType, targetId);
       }
       return await api.getThematicMapProduct(mapType, targetId);

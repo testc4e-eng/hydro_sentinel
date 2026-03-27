@@ -1,11 +1,13 @@
 
 from fastapi import APIRouter
 from app.api.v1.endpoints import (
+    alertes,
     admin_new,
     auth,
     dashboard,
     data_availability,
     health,
+    import_spatial,
     ingest,
     measurements,
     recapitulatif,
@@ -21,7 +23,10 @@ api_router.include_router(auth.router, tags=["login"])
 api_router.include_router(sites.router, tags=["sites"])
 api_router.include_router(measurements.router, prefix="/measurements", tags=["measurements"])
 api_router.include_router(recapitulatif.router, prefix="/recapitulatif", tags=["recapitulatif"])
+api_router.include_router(recapitulatif.router, prefix="/recap", tags=["recap"])
 api_router.include_router(dashboard.router, tags=["dashboard"])
+api_router.include_router(alertes.router, tags=["alertes"])
+api_router.include_router(import_spatial.router, tags=["import_spatial"])
 api_router.include_router(variables.router, tags=["variables"])
 api_router.include_router(admin_new.router, prefix="/admin", tags=["admin"])
 api_router.include_router(data_availability.router, prefix="/admin", tags=["admin"])

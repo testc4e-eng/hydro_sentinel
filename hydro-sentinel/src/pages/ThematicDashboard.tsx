@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { CloudSnow, ChevronLeft, ChevronRight, Waves } from "lucide-react";
+import { CloudRain, CloudSnow, ChevronLeft, ChevronRight, Waves } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useThematicMapCatalog, useThematicMapProduct } from "@/hooks/useApi";
-import { ProcessingChainCard } from "@/components/thematic/ProcessingChainCard";
 import { ThematicHistoryPanel } from "@/components/thematic/ThematicHistoryPanel";
 import { ThematicMapViewer } from "@/components/thematic/ThematicMapViewer";
 import { ThematicStatsCards } from "@/components/thematic/ThematicStatsCards";
@@ -31,7 +30,10 @@ function formatArea(value: number, unit: "m2" | "km2" | "ha"): string {
 }
 
 function getInitialMapType(searchParams: URLSearchParams): ThematicMapType {
-  return searchParams.get("type") === "snow" ? "snow" : "flood";
+  const type = searchParams.get("type");
+  if (type === "snow") return "snow";
+  if (type === "precip") return "precip";
+  return "flood";
 }
 
 export default function ThematicDashboard() {
@@ -91,11 +93,14 @@ export default function ThematicDashboard() {
     selectTimelineIndex(nextIndex);
   };
 
-  const pageTitle = mapType === "flood" ? "Carte inondation" : "Carte couverture de neige";
+  const pageTitle =
+    mapType === "flood" ? "Carte inondation" : mapType === "snow" ? "Carte couverture de neige" : "Carte Precipitation";
   const mapSubtitle =
     mapType === "flood"
       ? "Suivi des zones inondees avec historique temporel glissant."
-      : "Suivi de la couverture neigeuse avec historique temporel glissant.";
+      : mapType === "snow"
+        ? "Suivi de la couverture neigeuse avec historique temporel glissant."
+        : "Suivi des precipitations avec historique temporel glissant";
 
   return (
     <div className="min-h-[calc(100vh-4rem)] space-y-3 overflow-y-auto p-3">
@@ -111,11 +116,28 @@ export default function ThematicDashboard() {
         <CardHeader className="px-4 py-3">
           <CardTitle className="text-xs uppercase tracking-wide text-muted-foreground">Choix du module cartographique</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 gap-2 px-4 pb-4 pt-0 md:grid-cols-2">
+        <CardContent className="grid grid-cols-1 gap-2 px-4 pb-4 pt-0 md:grid-cols-3">
           <Button
             type="button"
-            variant={mapType === "flood" ? "default" : "outline"}
-            className="h-11 text-sm font-semibold md:h-12"
+            variant="outline"
+            className={`h-11 justify-center text-sm font-semibold md:h-12 ${
+              mapType === "precip"
+                ? "border-[#0052CC] bg-[#0052CC] text-white hover:bg-[#003f9f] hover:text-white"
+                : "border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200"
+            }`}
+            onClick={() => setMapType("precip")}
+          >
+            <CloudRain className="mr-2 h-4 w-4" />
+            Carte precipitation
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className={`h-11 justify-center text-sm font-semibold md:h-12 ${
+              mapType === "flood"
+                ? "border-[#0052CC] bg-[#0052CC] text-white hover:bg-[#003f9f] hover:text-white"
+                : "border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200"
+            }`}
             onClick={() => setMapType("flood")}
           >
             <Waves className="mr-2 h-4 w-4" />
@@ -123,8 +145,12 @@ export default function ThematicDashboard() {
           </Button>
           <Button
             type="button"
-            variant={mapType === "snow" ? "default" : "outline"}
-            className="h-11 text-sm font-semibold md:h-12"
+            variant="outline"
+            className={`h-11 justify-center text-sm font-semibold md:h-12 ${
+              mapType === "snow"
+                ? "border-[#0052CC] bg-[#0052CC] text-white hover:bg-[#003f9f] hover:text-white"
+                : "border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200"
+            }`}
             onClick={() => setMapType("snow")}
           >
             <CloudSnow className="mr-2 h-4 w-4" />
@@ -145,19 +171,33 @@ export default function ThematicDashboard() {
 
       {selectedProduct && (
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
-          <Card className="border-indigo-200/80 bg-indigo-50/60">
-            <CardHeader className="px-4 pb-1 pt-3">
-              <CardTitle className="text-xs uppercase tracking-wide text-indigo-700">Couverture</CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 pb-3 pt-0">
-              <div className="text-xl font-bold text-indigo-900">{selectedProduct.statistics.positive_class.percentage.toFixed(1)}%</div>
-              <div className="text-xs text-indigo-700/90">{selectedProduct.statistics.positive_class_label}</div>
-            </CardContent>
-          </Card>
+          {mapType === "precip" ? (
+            <Card className="border-indigo-200/80 bg-indigo-50/60">
+              <CardHeader className="px-4 pb-1 pt-3">
+                <CardTitle className="text-xs uppercase tracking-wide text-indigo-700">Precipitation cumulee</CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-3 pt-0">
+                <div className="text-xl font-bold text-indigo-900">
+                  {(selectedProduct.meta?.precip_cum_mm ?? selectedProduct.meta?.precip_mean_mm ?? 0).toFixed(1)} mm
+                </div>
+                <div className="text-xs text-indigo-700/90">Source {selectedProduct.meta?.source ?? selectedProduct.satellite}</div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="border-indigo-200/80 bg-indigo-50/60">
+              <CardHeader className="px-4 pb-1 pt-3">
+                <CardTitle className="text-xs uppercase tracking-wide text-indigo-700">Couverture</CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-3 pt-0">
+                <div className="text-xl font-bold text-indigo-900">{selectedProduct.statistics.positive_class.percentage.toFixed(1)}%</div>
+                <div className="text-xs text-indigo-700/90">{selectedProduct.statistics.positive_class_label}</div>
+              </CardContent>
+            </Card>
+          )}
           <Card className="border-cyan-200/80 bg-cyan-50/60">
             <CardHeader className="px-4 pb-1 pt-3">
               <CardTitle className="text-xs uppercase tracking-wide text-cyan-700">
-                {selectedProduct.statistics.positive_class_label}
+                {mapType === "precip" ? "Zone concernee" : selectedProduct.statistics.positive_class_label}
               </CardTitle>
             </CardHeader>
             <CardContent className="px-4 pb-3 pt-0">
@@ -168,12 +208,24 @@ export default function ThematicDashboard() {
           <Card className="border-amber-200/80 bg-amber-50/60">
             <CardHeader className="px-4 pb-1 pt-3">
               <CardTitle className="text-xs uppercase tracking-wide text-amber-700">
-                {selectedProduct.statistics.negative_class_label}
+                {mapType === "precip" ? "Intensite dominante" : selectedProduct.statistics.negative_class_label}
               </CardTitle>
             </CardHeader>
             <CardContent className="px-4 pb-3 pt-0">
-              <div className="text-base font-semibold text-amber-900">{formatArea(selectedProduct.statistics.negative_class.km2, "km2")}</div>
-              <div className="text-xs text-amber-700/90">{formatArea(selectedProduct.statistics.negative_class.hectares, "ha")}</div>
+              {mapType === "precip" ? (
+                <>
+                  <div
+                    className="h-3 w-full rounded"
+                    style={{ background: "linear-gradient(90deg, #16a34a 0%, #84cc16 18%, #facc15 40%, #f97316 58%, #ef4444 78%, #7e22ce 100%)" }}
+                  />
+                  <div className="text-xs text-amber-700/90">{selectedProduct.meta?.dominant_level ?? "Pluie moderee"}</div>
+                </>
+              ) : (
+                <>
+                  <div className="text-base font-semibold text-amber-900">{formatArea(selectedProduct.statistics.negative_class.km2, "km2")}</div>
+                  <div className="text-xs text-amber-700/90">{formatArea(selectedProduct.statistics.negative_class.hectares, "ha")}</div>
+                </>
+              )}
             </CardContent>
           </Card>
           <Card className="border-slate-200/80 bg-slate-50/80">
@@ -203,15 +255,15 @@ export default function ThematicDashboard() {
                     : "--"}
                 </div>
               </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Evenement</div>
-                <div>{selectedProduct?.event_name ?? "--"}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Satellite / Statut</div>
-                <div>{selectedProduct ? `${selectedProduct.satellite} / ${selectedProduct.status}` : "--"}</div>
-              </div>
-            </CardContent>
+                <div>
+                  <div className="text-xs text-muted-foreground">Evenement</div>
+                  <div>{selectedProduct ? selectedProduct.event_name : "--"}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Satellite / Statut</div>
+                  <div>{selectedProduct ? `${selectedProduct.meta?.source ?? selectedProduct.satellite} / ${selectedProduct.status}` : "--"}</div>
+                </div>
+              </CardContent>
 
             <div className="mx-4 border-t border-border/70" />
 
@@ -290,11 +342,8 @@ export default function ThematicDashboard() {
         </div>
 
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-12">
-          <div className="xl:col-span-9">
+          <div className="xl:col-span-12">
             <ThematicMapViewer mapType={mapType} product={selectedProduct ?? null} className="h-[620px] min-h-[520px]" />
-          </div>
-          <div className="xl:col-span-3">
-            <ProcessingChainCard steps={catalog?.processing_chain ?? []} />
           </div>
         </div>
       </div>

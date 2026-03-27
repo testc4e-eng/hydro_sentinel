@@ -166,9 +166,9 @@ export function MultiStationPrecipChart({
 
   return (
     <ResponsiveContainer width="100%" height={400}>
-      <ChartComponent data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+      <ChartComponent data={chartData} margin={{ top: 8, right: 32, left: 16, bottom: 24 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-        <XAxis dataKey="displayTime" tick={{ fontSize: 11 }} stroke="#6b7280" />
+        <XAxis dataKey="displayTime" tick={{ fontSize: 11 }} stroke="#6b7280" padding={{ left: 12, right: 28 }} />
         <YAxis
           tick={{ fontSize: 11 }}
           stroke="#6b7280"

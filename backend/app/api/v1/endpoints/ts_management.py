@@ -7,6 +7,7 @@ from sqlalchemy import text
 from app.db.session import get_db
 from typing import Optional, List, Any, Dict, Tuple, Set
 from datetime import datetime, timezone
+from statistics import median
 from pydantic import BaseModel
 from uuid import UUID
 import tempfile
@@ -16,6 +17,8 @@ import csv
 import sys
 import re
 import unicodedata
+import time
+import gc
 
 router = APIRouter()
 
@@ -114,6 +117,13 @@ QUALITY_FLAG_COLUMN_TOKENS = {
 }
 
 KNOWN_SOURCE_CODES: Tuple[str, ...] = ("OBS", "SIM", "AROME", "ECMWF")
+
+STATION_DECORATION_TOKENS = {
+    "debit", "flow", "inflow", "apport", "apports", "volume", "cote", "lacher", "lachers",
+    "pluie", "precip", "precipitation", "precipitations", "rain", "rainfall",
+    "mm", "m3", "m3s", "m3h", "hm3", "cms", "m", "s", "hr", "h", "1hr", "24h",
+    "station", "st", "poste", "hydro", "hydrologique",
+}
 
 
 def _get_pandas():
@@ -252,7 +262,320 @@ def _load_tabular_data(file_path: str, filename: str) -> Tuple[List[str], List[D
         return _load_with_builtin_parsers(file_path, filename)
 
 
+def _load_template_entity_alias_map(file_path: str, filename: str) -> Dict[str, str]:
+    """
+    Extract optional alias map from template sheet ('Bassins'/'Stations'):
+    Code -> Name. Keys are normalized with _entity_lookup_keys.
+    """
+    lower = (filename or "").lower()
+    if not lower.endswith((".xlsx", ".xlsm", ".xltx", ".xltm")):
+        return {}
+
+    alias_map: Dict[str, str] = {}
+
+    def _register(code_value: Any, name_value: Any, external_value: Any = None) -> None:
+        code_raw = str(code_value or "").strip()
+        name_raw = str(name_value or "").strip()
+        if not code_raw or not name_raw:
+            return
+        for key in _alias_lookup_keys(code_raw):
+            alias_map.setdefault(key, name_raw)
+        # Directly map external source column names (e.g. "AIN AICHA_Pluie 1hr (mm)")
+        # to canonical DB station names.
+        external_raw = str(external_value or "").strip()
+        if external_raw:
+            for key in _alias_lookup_keys(external_raw):
+                alias_map.setdefault(key, name_raw)
+
+    pd = _get_pandas()
+    if pd is not None:
+        try:
+            xls = pd.ExcelFile(file_path)
+            try:
+                sheet_name = "Bassins" if "Bassins" in xls.sheet_names else ("Stations" if "Stations" in xls.sheet_names else None)
+                if sheet_name:
+                    df = pd.read_excel(file_path, sheet_name=sheet_name)
+                    if not df.empty:
+                        columns = [str(c).strip().lower() for c in df.columns]
+                        code_idx = 0
+                        name_idx = 1 if len(columns) > 1 else 0
+                        ext_idx: Optional[int] = None
+                        for idx, col_name in enumerate(columns):
+                            if col_name in {"code", "id", "bassin_code", "station_code"}:
+                                code_idx = idx
+                            if col_name in {"nom", "name", "bassin_nom", "station_nom", "nom station"}:
+                                name_idx = idx
+                            if (
+                                "nom station fichier" in col_name
+                                or "station fichier" in col_name
+                                or "fichier pcp" in col_name
+                                or "header" in col_name
+                                or "colonne source" in col_name
+                            ):
+                                ext_idx = idx
+                        for row in df.values.tolist():
+                            if not isinstance(row, list):
+                                continue
+                            code_value = row[code_idx] if code_idx < len(row) else None
+                            name_value = row[name_idx] if name_idx < len(row) else None
+                            ext_value = row[ext_idx] if ext_idx is not None and ext_idx < len(row) else None
+                            _register(code_value, name_value, ext_value)
+            finally:
+                try:
+                    xls.close()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    if alias_map:
+        return alias_map
+
+    try:
+        from openpyxl import load_workbook  # type: ignore
+        wb = load_workbook(file_path, read_only=True, data_only=True)
+        sheet_name = "Bassins" if "Bassins" in wb.sheetnames else ("Stations" if "Stations" in wb.sheetnames else None)
+        if sheet_name:
+            ws = wb[sheet_name]
+            rows_iter = ws.iter_rows(values_only=True)
+            header = list(next(rows_iter, []) or [])
+            header_norm = [str(h or "").strip().lower() for h in header]
+            code_idx = 0
+            name_idx = 1 if len(header_norm) > 1 else 0
+            ext_idx: Optional[int] = None
+            for idx, col_name in enumerate(header_norm):
+                if col_name in {"code", "id", "bassin_code", "station_code"}:
+                    code_idx = idx
+                if col_name in {"nom", "name", "bassin_nom", "station_nom", "nom station"}:
+                    name_idx = idx
+                if (
+                    "nom station fichier" in col_name
+                    or "station fichier" in col_name
+                    or "fichier pcp" in col_name
+                    or "header" in col_name
+                    or "colonne source" in col_name
+                ):
+                    ext_idx = idx
+            for row in rows_iter:
+                row_list = list(row or [])
+                code_value = row_list[code_idx] if code_idx < len(row_list) else None
+                name_value = row_list[name_idx] if name_idx < len(row_list) else None
+                ext_value = row_list[ext_idx] if ext_idx is not None and ext_idx < len(row_list) else None
+                _register(code_value, name_value, ext_value)
+        wb.close()
+    except Exception:
+        pass
+
+    return alias_map
+
+
 def _coerce_datetime_utc(value: Any) -> Optional[datetime]:
+    return _coerce_datetime_utc_with_style(value, "AUTO")
+
+
+MONTH_NAME_TO_NUMBER = {
+    "jan": 1,
+    "january": 1,
+    "janv": 1,
+    "janvier": 1,
+    "feb": 2,
+    "february": 2,
+    "fev": 2,
+    "fevr": 2,
+    "fevrier": 2,
+    "mar": 3,
+    "march": 3,
+    "mars": 3,
+    "apr": 4,
+    "april": 4,
+    "avr": 4,
+    "avril": 4,
+    "may": 5,
+    "mai": 5,
+    "jun": 6,
+    "june": 6,
+    "juin": 6,
+    "jul": 7,
+    "july": 7,
+    "juil": 7,
+    "juillet": 7,
+    "aug": 8,
+    "august": 8,
+    "aou": 8,
+    "aout": 8,
+    "sep": 9,
+    "sept": 9,
+    "september": 9,
+    "oct": 10,
+    "october": 10,
+    "nov": 11,
+    "november": 11,
+    "dec": 12,
+    "december": 12,
+    "decembre": 12,
+}
+
+
+def _parse_compact_month_name_datetime(text_value: str) -> Optional[datetime]:
+    """
+    Parse compact datetime strings like:
+    - 01jan2026 0000
+    - 1 jan 2026 00:00
+    - 01-jan-2026 00:00:00
+    """
+    raw = str(text_value or "").strip().lower()
+    if not raw:
+        return None
+
+    normalized = _fold_text(raw)
+    normalized = re.sub(r"[._-]", " ", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+
+    # compact token: 01jan2026 + optional time
+    compact = re.match(r"^(\d{1,2})([a-z]+)(\d{4})(?:\s+(\d{2})(\d{2})(\d{2})?)?$", normalized)
+    if compact:
+        day = int(compact.group(1))
+        month_name = compact.group(2)
+        year = int(compact.group(3))
+        month = MONTH_NAME_TO_NUMBER.get(month_name)
+        if month is None:
+            return None
+        hour = int(compact.group(4) or 0)
+        minute = int(compact.group(5) or 0)
+        second = int(compact.group(6) or 0)
+        try:
+            return datetime(year, month, day, hour, minute, second)
+        except ValueError:
+            return None
+
+    # spaced token: 01 jan 2026 + optional time
+    spaced = re.match(
+        r"^(\d{1,2})\s+([a-z]+)\s+(\d{4})(?:\s+(\d{1,2})(?::?(\d{2}))(?::?(\d{2}))?)?$",
+        normalized,
+    )
+    if spaced:
+        day = int(spaced.group(1))
+        month_name = spaced.group(2)
+        year = int(spaced.group(3))
+        month = MONTH_NAME_TO_NUMBER.get(month_name)
+        if month is None:
+            return None
+        hour = int(spaced.group(4) or 0)
+        minute = int(spaced.group(5) or 0)
+        second = int(spaced.group(6) or 0)
+        try:
+            return datetime(year, month, day, hour, minute, second)
+        except ValueError:
+            return None
+
+    return None
+
+
+def _detect_datetime_style(records: List[Dict[str, Any]], ts_col: str) -> Tuple[str, str]:
+    """
+    Detect dominant datetime format to avoid DD/MM vs MM/DD traps.
+    Returns (style, confidence) where style in:
+      ISO, YMD, DMY, MDY, AUTO
+    """
+    iso_like = 0
+    ymd_like = 0
+    dmy_like = 0
+    mdy_like = 0
+    month_name_like = 0
+    dmy_strong = 0  # first token > 12
+    mdy_strong = 0  # second token > 12
+    sampled = 0
+
+    for row in records:
+        raw = row.get(ts_col)
+        if raw is None:
+            continue
+        text_value = str(raw).strip()
+        if not text_value:
+            continue
+        sampled += 1
+        # Analyze a wider sample to avoid head-only ambiguity (e.g. up to 12/03).
+        if sampled > 20000:
+            break
+
+        # ISO / YMD-like
+        if re.match(r"^\d{4}-\d{2}-\d{2}", text_value):
+            iso_like += 1
+            ymd_like += 1
+            continue
+        if re.match(r"^\d{4}/\d{2}/\d{2}", text_value):
+            ymd_like += 1
+            continue
+
+        if _parse_compact_month_name_datetime(text_value) is not None:
+            month_name_like += 1
+            continue
+
+        slash_match = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{4})", text_value)
+        if slash_match:
+            a = int(slash_match.group(1))
+            b = int(slash_match.group(2))
+            if a > 12 and b <= 12:
+                dmy_strong += 1
+            elif b > 12 and a <= 12:
+                mdy_strong += 1
+            # fallback weak score by parse success
+            try:
+                datetime.strptime(text_value, "%d/%m/%Y %H:%M:%S")
+                dmy_like += 1
+            except ValueError:
+                try:
+                    datetime.strptime(text_value, "%d/%m/%Y %H:%M")
+                    dmy_like += 1
+                except ValueError:
+                    try:
+                        datetime.strptime(text_value, "%d/%m/%Y")
+                        dmy_like += 1
+                    except ValueError:
+                        pass
+            try:
+                datetime.strptime(text_value, "%m/%d/%Y %H:%M:%S")
+                mdy_like += 1
+            except ValueError:
+                try:
+                    datetime.strptime(text_value, "%m/%d/%Y %H:%M")
+                    mdy_like += 1
+                except ValueError:
+                    try:
+                        datetime.strptime(text_value, "%m/%d/%Y")
+                        mdy_like += 1
+                    except ValueError:
+                        pass
+
+    if sampled == 0:
+        return ("AUTO", "none")
+
+    if iso_like > 0 and dmy_like == 0 and mdy_like == 0:
+        return ("ISO", "high")
+
+    if ymd_like > 0 and dmy_like == 0 and mdy_like == 0:
+        return ("YMD", "high")
+
+    if month_name_like > 0 and iso_like == 0 and ymd_like == 0:
+        return ("DMY", "high")
+
+    if dmy_strong > 0 and mdy_strong == 0:
+        return ("DMY", "high")
+
+    # Only pick MDY when evidence is very clear and DMY has no strong evidence.
+    if mdy_strong > 0 and dmy_strong == 0 and mdy_like > (dmy_like * 1.2):
+        return ("MDY", "high")
+
+    if dmy_like > mdy_like:
+        return ("DMY", "medium")
+    if mdy_like > dmy_like and mdy_like > (dmy_like * 1.2):
+        return ("MDY", "medium")
+
+    # Ambiguous slash dates: prefer DMY for project ingestion context (fr-FR datasets).
+    return ("DMY", "low")
+
+
+def _coerce_datetime_utc_with_style(value: Any, style: str = "AUTO") -> Optional[datetime]:
     if value is None:
         return None
 
@@ -264,33 +587,125 @@ def _coerce_datetime_utc(value: Any) -> Optional[datetime]:
             return None
 
         normalized = text_value.replace("Z", "+00:00")
+        style_upper = (style or "AUTO").strip().upper()
+        parsed = None
+
+        # 1) ISO / native first
         try:
-            dt = datetime.fromisoformat(normalized)
+            parsed = datetime.fromisoformat(normalized)
         except ValueError:
             parsed = None
-            for fmt in (
-                "%Y-%m-%d %H:%M:%S",
-                "%Y-%m-%d %H:%M",
-                "%Y-%m-%d",
-                "%d/%m/%Y %H:%M:%S",
-                "%d/%m/%Y %H:%M",
-                "%d/%m/%Y",
-                "%m/%d/%Y %H:%M:%S",
-                "%m/%d/%Y %H:%M",
-                "%m/%d/%Y",
-            ):
+
+        # 2) style-aware explicit parsing
+        if parsed is None:
+            parsed = _parse_compact_month_name_datetime(text_value)
+
+        if parsed is None:
+            if style_upper == "DMY":
+                fmts = ("%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%d/%m/%Y")
+            elif style_upper == "MDY":
+                fmts = ("%m/%d/%Y %H:%M:%S", "%m/%d/%Y %H:%M", "%m/%d/%Y")
+            elif style_upper == "YMD":
+                fmts = ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d", "%Y/%m/%d %H:%M:%S", "%Y/%m/%d %H:%M", "%Y/%m/%d")
+            elif style_upper == "ISO":
+                fmts = ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d")
+            else:
+                # AUTO fallback: prefer DMY before MDY to align with fr-FR ingestion habits
+                fmts = (
+                    "%Y-%m-%d %H:%M:%S",
+                    "%Y-%m-%d %H:%M",
+                    "%Y-%m-%d",
+                    "%d/%m/%Y %H:%M:%S",
+                    "%d/%m/%Y %H:%M",
+                    "%d/%m/%Y",
+                    "%m/%d/%Y %H:%M:%S",
+                    "%m/%d/%Y %H:%M",
+                    "%m/%d/%Y",
+                )
+
+            for fmt in fmts:
                 try:
                     parsed = datetime.strptime(text_value, fmt)
                     break
                 except ValueError:
                     continue
-            if parsed is None:
-                return None
-            dt = parsed
+
+        if parsed is None:
+            return None
+        dt = parsed
 
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)
+
+
+def _swap_day_month(dt: datetime) -> Optional[datetime]:
+    if dt.day > 12 or dt.month > 12 or dt.day == dt.month:
+        return None
+    try:
+        return dt.replace(day=dt.month, month=dt.day)
+    except ValueError:
+        return None
+
+
+def _sanitize_timestamp_sequence(
+    parsed_records: List[Dict[str, Any]],
+    ts_col: str,
+) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
+    """
+    Timeline sanity correction:
+    - Detect large jumps inconsistent with dominant cadence.
+    - Try day/month swap on offending timestamp (typical MM/DD vs DD/MM corruption).
+    - Drop unrecoverable outliers.
+    """
+    if len(parsed_records) < 3:
+        return parsed_records, {"corrected_day_month_swap": 0, "dropped_outlier_timestamps": 0}
+
+    corrected = 0
+    dropped = 0
+    output: List[Dict[str, Any]] = []
+    positive_deltas: List[float] = []
+    prev_dt: Optional[datetime] = None
+
+    for row in parsed_records:
+        raw_dt = row.get(ts_col)
+        if not isinstance(raw_dt, datetime):
+            dropped += 1
+            continue
+
+        candidate = raw_dt
+        if prev_dt is not None:
+            raw_delta = (candidate - prev_dt).total_seconds()
+            for d in positive_deltas[-200:]:
+                pass
+            expected_step = median(positive_deltas[-200:]) if positive_deltas else 3600.0
+            jump_threshold = max(expected_step * 8.0, 72.0 * 3600.0)
+
+            if abs(raw_delta) > jump_threshold:
+                swapped = _swap_day_month(candidate)
+                if swapped is not None:
+                    swapped_delta = (swapped - prev_dt).total_seconds()
+                    if abs(swapped_delta) <= jump_threshold and abs(swapped_delta) < abs(raw_delta):
+                        candidate = swapped
+                        corrected += 1
+                    else:
+                        dropped += 1
+                        continue
+                else:
+                    dropped += 1
+                    continue
+
+        row_copy = dict(row)
+        row_copy[ts_col] = candidate
+        output.append(row_copy)
+
+        if prev_dt is not None:
+            d = (candidate - prev_dt).total_seconds()
+            if d > 0 and d <= 15 * 24 * 3600:
+                positive_deltas.append(d)
+        prev_dt = candidate
+
+    return output, {"corrected_day_month_swap": corrected, "dropped_outlier_timestamps": dropped}
 
 
 def _coerce_float(value: Any) -> Optional[float]:
@@ -495,6 +910,29 @@ def _strip_source_tokens(value: Any) -> str:
     return "_".join(tokens)
 
 
+def _station_name_stem(value: Any) -> str:
+    normalized = _normalize_identifier(value)
+    if normalized:
+        normalized = normalized.replace("d_bit", "debit")
+        normalized = normalized.replace("de_bit", "debit")
+    tokens = [
+        token for token in _identifier_tokens(normalized or value)
+        if token not in SOURCE_HINT_TOKENS
+        and token not in SOURCE_DECORATION_TOKENS
+        and token not in STATION_DECORATION_TOKENS
+    ]
+    stem = "_".join(tokens).strip("_")
+    return re.sub(r"_+", "_", stem)
+
+
+def _alias_lookup_keys(value: Any) -> List[str]:
+    base = _entity_lookup_keys(value)
+    stem = _station_name_stem(value)
+    if stem:
+        base.append(stem)
+    return _ordered_unique(base)
+
+
 def _infer_variable_family(value: Any) -> Optional[str]:
     normalized = _normalize_identifier(value)
     if not normalized:
@@ -609,6 +1047,15 @@ def _entity_lookup_keys(value: Any) -> List[str]:
         if stripped and stripped != normalized:
             keys.append(stripped)
 
+        # DGM template compatibility:
+        # "DGM-1_arome" -> "dgm_1" -> add "1" to match numeric basin codes.
+        dgm_match = re.match(r"^dgm[_-]?0*([0-9]+)$", stripped or normalized)
+        if dgm_match:
+            num = dgm_match.group(1)
+            keys.append(num)
+            keys.append(f"dgm_{num}")
+            keys.append(f"dgm-{num}")
+
     numeric_clean = raw.lower()
     if numeric_clean.endswith(".0") and numeric_clean.replace(".", "", 1).isdigit():
         keys.append(numeric_clean[:-2])
@@ -687,6 +1134,186 @@ async def _load_source_ids_map(db: AsyncSession) -> Dict[str, Any]:
         code = str(row["code"]).upper()
         source_map[code] = row["source_id"]
     return source_map
+
+
+async def _load_entity_map(db: AsyncSession, entity_type: str) -> Dict[str, Dict[str, str]]:
+    entity_map: Dict[str, Dict[str, str]] = {}
+
+    if entity_type == "bassins":
+        # Primary lookup: direct basin code/name.
+        basin_res = await db.execute(
+            text(
+                """
+                SELECT
+                    b.basin_id::text AS entity_id,
+                    b.code::text AS code,
+                    b.name AS name
+                FROM geo.basin b
+                """
+            )
+        )
+        for row in basin_res.mappings().all():
+            payload = {
+                "id": str(row["entity_id"]),
+                "type": "Bassin",
+                "code": str(row.get("code") or ""),
+                "name": str(row.get("name") or ""),
+            }
+            for key in _entity_lookup_keys(row.get("code")):
+                entity_map.setdefault(key, payload)
+            for key in _entity_lookup_keys(row.get("name")):
+                entity_map.setdefault(key, payload)
+
+        # Fallback lookup for DGM templates that may contain barrage labels:
+        # map barrage station code/name to its basin_id.
+        station_res = await db.execute(
+            text(
+                """
+                SELECT
+                    s.basin_id::text AS entity_id,
+                    s.code::text AS code,
+                    s.name AS name
+                FROM geo.station s
+                WHERE s.basin_id IS NOT NULL
+                """
+            )
+        )
+        for row in station_res.mappings().all():
+            payload = {
+                "id": str(row["entity_id"]),
+                "type": "Bassin",
+                "code": str(row.get("code") or ""),
+                "name": str(row.get("name") or ""),
+            }
+            for key in _entity_lookup_keys(row.get("code")):
+                entity_map.setdefault(key, payload)
+            for key in _entity_lookup_keys(row.get("name")):
+                entity_map.setdefault(key, payload)
+        return entity_map
+
+    station_res = await db.execute(
+        text(
+            """
+            SELECT
+                s.station_id::text AS entity_id,
+                s.code::text AS code,
+                s.name AS name,
+                COALESCE(NULLIF(TRIM(s.station_type), ''), 'Station') AS station_type
+            FROM geo.station s
+            """
+        )
+    )
+    for row in station_res.mappings().all():
+        payload = {
+            "id": str(row["entity_id"]),
+            "type": str(row.get("station_type") or "Station"),
+            "code": str(row.get("code") or ""),
+            "name": str(row.get("name") or ""),
+        }
+        for key in _entity_lookup_keys(row.get("code")):
+            entity_map.setdefault(key, payload)
+        for key in _entity_lookup_keys(row.get("name")):
+            entity_map.setdefault(key, payload)
+
+    return entity_map
+
+
+async def _load_entity_map_safe(db: AsyncSession, entity_type: str) -> Dict[str, Dict[str, str]]:
+    try:
+        return await _load_entity_map(db, entity_type)
+    except Exception as exc:
+        print(f"Warning: _load_entity_map failed ({exc}), falling back to legacy entity lookup.")
+        entity_map: Dict[str, Dict[str, str]] = {}
+        if entity_type == "bassins":
+            basin_queries = [
+                "SELECT basin_id as id, code, name FROM geo.basin",
+                "SELECT basin_id as id, code, nom as name FROM geo.basin",
+                "SELECT basin_id as id, basin_code as code, name FROM geo.basin",
+                "SELECT basin_id as id, basin_code as code, nom as name FROM geo.basin",
+                "SELECT basin_id as id, NULL::text as code, name FROM geo.basin",
+                "SELECT basin_id as id, NULL::text as code, nom as name FROM geo.basin",
+            ]
+            rows = []
+            for sql in basin_queries:
+                try:
+                    res = await db.execute(text(sql))
+                    rows = res.mappings().all()
+                    if rows is not None:
+                        break
+                except Exception:
+                    continue
+            for row in rows or []:
+                payload = {
+                    "id": str(row.get("id")),
+                    "type": "Bassin",
+                    "code": str(row.get("code") or ""),
+                    "name": str(row.get("name") or ""),
+                }
+                for key in _entity_lookup_keys(row.get("code")):
+                    entity_map.setdefault(key, payload)
+                for key in _entity_lookup_keys(row.get("name")):
+                    entity_map.setdefault(key, payload)
+        else:
+            station_queries = [
+                "SELECT station_id as id, code, name, station_type as type FROM geo.station",
+                "SELECT station_id as id, code, nom as name, station_type as type FROM geo.station",
+                "SELECT station_id as id, station_code as code, name, station_type as type FROM geo.station",
+                "SELECT station_id as id, station_code as code, nom as name, station_type as type FROM geo.station",
+                "SELECT station_id as id, NULL::text as code, name, station_type as type FROM geo.station",
+                "SELECT station_id as id, NULL::text as code, nom as name, station_type as type FROM geo.station",
+            ]
+            rows = []
+            for sql in station_queries:
+                try:
+                    res = await db.execute(text(sql))
+                    rows = res.mappings().all()
+                    if rows is not None:
+                        break
+                except Exception:
+                    continue
+            for row in rows or []:
+                payload = {
+                    "id": str(row.get("id")),
+                    "type": str(row.get("type") or "Station"),
+                    "code": str(row.get("code") or ""),
+                    "name": str(row.get("name") or ""),
+                }
+                for key in _entity_lookup_keys(row.get("code")):
+                    entity_map.setdefault(key, payload)
+                for key in _entity_lookup_keys(row.get("name")):
+                    entity_map.setdefault(key, payload)
+        return entity_map
+
+
+def _entity_field(entity: Any, field: str, default: Optional[str] = None) -> Optional[str]:
+    if entity is None:
+        return default
+    if isinstance(entity, dict):
+        value = entity.get(field, default)
+        return default if value is None else str(value)
+    value = getattr(entity, field, default)
+    return default if value is None else str(value)
+
+
+def _safe_remove_tmp(path: str, retries: int = 5, delay: float = 0.15) -> None:
+    if not path:
+        return
+    for attempt in range(retries):
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+            return
+        except PermissionError:
+            gc.collect()
+            if attempt == retries - 1:
+                print(f"Warning: unable to remove temp file (locked): {path}")
+                return
+            time.sleep(delay * (attempt + 1))
+        except FileNotFoundError:
+            return
+        except Exception as exc:
+            print(f"Warning: temp cleanup failed for {path}: {exc}")
+            return
 
 
 async def _ensure_import_run_id(
@@ -810,23 +1437,17 @@ async def analyze_timeseries_file(
             # Detect timestamp
             ts_col = next((c for c in columns if c.lower() in TIMESTAMP_KEYWORDS), None)
             
-            # Get all entities
-            if entity_type == "bassins":
-                st_res = await db.execute(text("SELECT code, name, 'Bassin' as station_type FROM geo.basin"))
-            else:
-                st_res = await db.execute(text("SELECT code, name, station_type FROM geo.station"))
-
-            entities_db = st_res.fetchall()
-            entity_map: Dict[str, Any] = {}
-            for entity in entities_db:
-                for key in _entity_lookup_keys(entity.code):
-                    entity_map.setdefault(key, entity)
-                for key in _entity_lookup_keys(entity.name):
-                    entity_map.setdefault(key, entity)
+            entity_map = await _load_entity_map_safe(db, entity_type)
+            try:
+                template_alias_map = _load_template_entity_alias_map(tmp_path, file.filename)
+            except Exception as alias_exc:
+                print(f"Warning: template alias map failed ({alias_exc})")
+                template_alias_map = {}
             variable_lookup = await _load_variable_lookup(db)
 
             found_entities = []
             unknown_columns = []
+            unmatched_entities: List[str] = []
 
             # Statistics
             rows_count = len(records)
@@ -839,14 +1460,24 @@ async def analyze_timeseries_file(
                     col for col in columns
                     if col != ts_col and not col.lower().startswith("unnamed")
                 ]
+                detected_dt_style, detected_dt_confidence = _detect_datetime_style(records, ts_col)
                 detected_source_set: Set[str] = set()
                 if file_source_hints:
                     detected_source_set.update(file_source_hints)
                 detected_family_set: Set[str] = set()
                 column_analysis: List[Dict[str, Any]] = []
 
-                parsed_times = [_coerce_datetime_utc(row.get(ts_col)) for row in records]
-                valid_times = [t for t in parsed_times if t is not None]
+                parsed_records_for_timeline: List[Dict[str, Any]] = []
+                for row in records:
+                    ts_val = _coerce_datetime_utc_with_style(row.get(ts_col), detected_dt_style)
+                    if ts_val is None:
+                        continue
+                    copied = dict(row)
+                    copied[ts_col] = ts_val
+                    parsed_records_for_timeline.append(copied)
+
+                sanitized_records, ts_sanity = _sanitize_timestamp_sequence(parsed_records_for_timeline, ts_col)
+                valid_times = [r[ts_col] for r in sanitized_records if isinstance(r.get(ts_col), datetime)]
                 if valid_times:
                     start_date = min(valid_times).isoformat()
                     end_date = max(valid_times).isoformat()
@@ -1015,21 +1646,33 @@ async def analyze_timeseries_file(
                             detected_family_set.add(family_hint)
 
                         matched_entity = None
-                        for key in _entity_lookup_keys(col):
+                        for key in _alias_lookup_keys(col):
                             if key in entity_map:
                                 matched_entity = entity_map[key]
                                 break
+                        if matched_entity is None and template_alias_map:
+                            alias_name = None
+                            for key in _alias_lookup_keys(col):
+                                alias_name = template_alias_map.get(key)
+                                if alias_name:
+                                    break
+                            if alias_name:
+                                for alias_key in _entity_lookup_keys(alias_name):
+                                    if alias_key in entity_map:
+                                        matched_entity = entity_map[alias_key]
+                                        break
 
                         if matched_entity is not None:
                             ent = matched_entity
                             found_entities.append({
                                 "column": col,
-                                "matched_station": ent.name,
-                                "station_code": ent.code,
-                                "type": ent.station_type
+                                "matched_station": _entity_field(ent, "name", col) or col,
+                                "station_code": _entity_field(ent, "code"),
+                                "type": _entity_field(ent, "type", "Station") or "Station"
                             })
                         elif variable_payload is None:
                             unknown_columns.append(col)
+                            unmatched_entities.append(col)
 
                         kind = "station_or_bassin" if matched_entity is not None else ("variable" if variable_payload else "unknown")
                         column_analysis.append(
@@ -1041,8 +1684,8 @@ async def analyze_timeseries_file(
                                 "variable_code": variable_payload.get("variable_code") if variable_payload else None,
                                 "variable_label": variable_payload.get("variable_label") if variable_payload else None,
                                 "unit": variable_payload.get("unit") if variable_payload else None,
-                                "matched_station": matched_entity.name if matched_entity is not None else None,
-                                "matched_station_code": matched_entity.code if matched_entity is not None else None,
+                                "matched_station": (_entity_field(matched_entity, "name", col) or col) if matched_entity is not None else None,
+                                "matched_station_code": _entity_field(matched_entity, "code") if matched_entity is not None else None,
                             }
                         )
 
@@ -1056,12 +1699,21 @@ async def analyze_timeseries_file(
                     "stations_found": len(found_entities),
                     "stations_details": found_entities,
                     "unknown_columns": unknown_columns,
+                    "unmatched_entities": unmatched_entities,
                     "preview": preview_data,
                     "columns": columns,
                     "file_source_hint": file_source_hint,
                     "file_source_hints": file_source_hints,
                     "detected_sources": [c for c in ["OBS", "AROME", "ECMWF", "SIM"] if c in detected_source_set],
                     "detected_families": [f for f in ["precip", "hydro"] if f in detected_family_set],
+                    "detected_datetime_format": detected_dt_style,
+                    "detected_datetime_confidence": detected_dt_confidence,
+                    "timestamp_sanity": ts_sanity,
+                    "datetime_format_warning": (
+                        "Format date ambigu detecte (ex: 03/04/2026). Le systeme applique DMY (jour/mois) par defaut."
+                        if detected_dt_confidence == "low"
+                        else None
+                    ),
                     "suggested_sources": _suggest_source_codes(detected_family_set, detected_source_set),
                     "auto_source_supported": any(item.get("source_hint") for item in column_analysis),
                     "column_analysis": column_analysis,
@@ -1080,9 +1732,11 @@ async def analyze_timeseries_file(
                 }
 
         finally:
-            os.remove(tmp_path)
+            _safe_remove_tmp(tmp_path)
             
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(500, f"Analysis failed: {str(e)}")
 
 @router.post("/timeseries/upload")
@@ -1120,17 +1774,21 @@ async def upload_timeseries(
             if not ts_col:
                 # Try first column
                 ts_col = columns[0]
+
+            detected_dt_style, detected_dt_confidence = _detect_datetime_style(records, ts_col)
             
             # Parse timestamps and keep only valid rows
             parsed_records = []
             for row in records:
-                ts_val = _coerce_datetime_utc(row.get(ts_col))
+                ts_val = _coerce_datetime_utc_with_style(row.get(ts_col), detected_dt_style)
                 if ts_val is None:
                     continue
                 copied = dict(row)
                 copied[ts_col] = ts_val
                 parsed_records.append(copied)
-            
+
+            parsed_records, ts_sanity = _sanitize_timestamp_sequence(parsed_records, ts_col)
+             
             if not parsed_records:
                  raise HTTPException(400, "File is empty or no valid timestamps found")
 
@@ -1329,25 +1987,13 @@ async def upload_timeseries(
                     )
                 
                 # Cache entity IDs
-                if entity_type == "bassins":
-                    st_res = await db.execute(text("SELECT code, basin_id as id, 'Bassin' as type FROM geo.basin"))
-                else:
-                    st_res = await db.execute(text("SELECT code, station_id as id, station_type as type FROM geo.station"))
-
-                entity_map: Dict[str, Dict[str, str]] = {}
-                for row in st_res.mappings().all():
-                    payload = {"id": str(row["id"]), "type": row["type"]}
-                    for key in _entity_lookup_keys(row["code"]):
-                        entity_map.setdefault(key, payload)
-                
-                if entity_type == "bassins":
-                    st_res = await db.execute(text("SELECT name, basin_id as id, 'Bassin' as type FROM geo.basin"))
-                else:
-                    st_res = await db.execute(text("SELECT name, station_id as id, station_type as type FROM geo.station"))
-                for row in st_res.mappings().all():
-                    payload = {"id": str(row["id"]), "type": row["type"]}
-                    for key in _entity_lookup_keys(row["name"]):
-                        entity_map.setdefault(key, payload)
+                entity_map = await _load_entity_map_safe(db, entity_type)
+                try:
+                    template_alias_map = _load_template_entity_alias_map(tmp_path, file.filename)
+                except Exception as alias_exc:
+                    print(f"Warning: template alias map failed ({alias_exc})")
+                    template_alias_map = {}
+                unmatched_columns: List[str] = []
 
                 for col in columns:
                     if col == ts_col: continue
@@ -1356,16 +2002,31 @@ async def upload_timeseries(
                         continue
 
                     st_info = None
-                    for key in _entity_lookup_keys(col):
+                    for key in _alias_lookup_keys(col):
                         if key in entity_map:
                             st_info = entity_map[key]
                             break
+                    if not st_info and template_alias_map:
+                        alias_name = None
+                        for key in _alias_lookup_keys(col):
+                            alias_name = template_alias_map.get(key)
+                            if alias_name:
+                                break
+                        if alias_name:
+                            for alias_key in _entity_lookup_keys(alias_name):
+                                if alias_key in entity_map:
+                                    st_info = entity_map[alias_key]
+                                    break
                     if not st_info:
                         print(f"Warning: Entity '{col}' not found in DB (normalized matching)")
+                        unmatched_columns.append(col)
                         continue
                     
-                    st_id = st_info['id']
-                    st_type = st_info['type']
+                    st_id = _entity_field(st_info, "id")
+                    st_type = _entity_field(st_info, "type", "Station") or "Station"
+                    if not st_id:
+                        unmatched_columns.append(col)
+                        continue
                     
                     # Validate Barrage constraint
                     if entity_type == "stations" and is_barrage_var and "barrage" not in str(st_type).lower():
@@ -1540,11 +2201,19 @@ async def upload_timeseries(
                         f" {len(policy_skipped_columns)} colonne(s) ignoree(s) car la source "
                         f"{requested_source_code} n'est pas compatible avec certaines variables."
                     )
+                unmatched_details = ""
+                if import_mode == "multi_station" and "unmatched_columns" in locals() and unmatched_columns:
+                    preview = ", ".join(unmatched_columns[:8])
+                    suffix = "..." if len(unmatched_columns) > 8 else ""
+                    label = "bassins" if entity_type == "bassins" else "stations"
+                    unmatched_details = (
+                        f" {len(unmatched_columns)} {label} non reconnus: {preview}{suffix}."
+                    )
                 raise HTTPException(
                     status_code=400,
                     detail=(
                         "Aucun point importe. Verifiez le format du fichier, les noms/codes des "
-                        f"colonnes (stations ou bassins), le timestamp et la source selectionnee.{policy_details}"
+                        f"colonnes (stations ou bassins), le timestamp et la source selectionnee.{policy_details}{unmatched_details}"
                     ),
                 )
               
@@ -1554,6 +2223,9 @@ async def upload_timeseries(
                 "message": f"Imported {records_count} data points",
                 "effective_source_code": requested_source_code,
                 "source_resolution": source_resolution_mode,
+                "detected_datetime_format": detected_dt_style,
+                "detected_datetime_confidence": detected_dt_confidence,
+                "timestamp_sanity": ts_sanity,
                 "file_source_hint": file_source_hint,
                 "file_source_hints": file_source_hints,
                 "column_source_hints": column_source_hints,
@@ -1576,7 +2248,7 @@ async def upload_timeseries(
             traceback.print_exc()
             raise HTTPException(500, f"Import failed: {str(e)}")
         finally:
-            os.remove(tmp_path)
+            _safe_remove_tmp(tmp_path)
             
     except HTTPException:
         raise

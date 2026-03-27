@@ -1,0 +1,11 @@
+variable;source;nb_mesures;date_debut;date_fin;table_source
+flow_m3s;OBS;54353;2025-12-14 16:00:00-08:00;2026-02-26 00:00:00-08:00;ts.measurement
+flow_m3s;SIM;7635;2025-12-31 16:00:00-08:00;2026-04-01 16:00:00-07:00;ts.measurement
+inflow_m3s;SIM;6552;2025-12-31 16:00:00-08:00;2026-04-01 16:00:00-07:00;ts.measurement
+lacher_m3s;SIM;6552;2025-12-31 16:00:00-08:00;2026-04-01 16:00:00-07:00;ts.measurement
+precip_mm;AROME;3234;2026-02-25 17:00:00-08:00;2026-03-29 23:00:00-07:00;ts.basin_measurement
+precip_mm;ECMWF;5040;2026-02-25 17:00:00-08:00;2026-04-09 17:00:00-07:00;ts.basin_measurement
+precip_mm;ECMWF;1074;2026-02-25 17:00:00-08:00;2026-03-19 17:00:00-07:00;ts.measurement
+precip_mm;OBS;82237;2025-12-14 16:00:00-08:00;2026-03-05 06:00:00-08:00;ts.measurement
+volume_hm3;OBS;18942;2025-12-14 16:00:00-08:00;2026-02-20 03:00:00-08:00;ts.measurement
+volume_hm3;SIM;6552;2025-12-31 16:00:00-08:00;2026-04-01 16:00:00-07:00;ts.measurement
