@@ -1,0 +1,57 @@
+﻿{
+  "prompt_id": "AB-CO-002",
+  "nom": "Clarifier les objectifs metier",
+  "date_run": "2026-03-14",
+  "objectifs_smart": [
+    {
+      "id": "OBJ-01",
+      "objectif": "Obtenir une lecture decisionnelle complete de la situation crue depuis le dashboard principal",
+      "mesure": "Temps median entre ouverture dashboard et validation etat critique par un operateur",
+      "cible": "<= 5 minutes",
+      "echeance": "2026-06-30",
+      "priorite": "Haute",
+      "type": "metier"
+    },
+    {
+      "id": "OBJ-02",
+      "objectif": "Fiabiliser le dossier de decision lacher pour les barrages prioritaires",
+      "mesure": "Taux de dossiers avec donnees pluie/debit/volume/lacher completes sur fenetre active",
+      "cible": ">= 95%",
+      "echeance": "2026-07-31",
+      "priorite": "Haute",
+      "type": "operationnel"
+    },
+    {
+      "id": "OBJ-03",
+      "objectif": "Reduire les trous de series bloquants sur les variables critiques",
+      "mesure": "Part des series critiques sans trou bloquant sur la fenetre decisionnelle",
+      "cible": ">= 90%",
+      "echeance": "2026-07-31",
+      "priorite": "Haute",
+      "type": "data"
+    },
+    {
+      "id": "OBJ-04",
+      "objectif": "Stabiliser les parcours ingestion et administration de donnees",
+      "mesure": "Taux d imports analyses puis executes sans reprise manuelle lourde",
+      "cible": ">= 90%",
+      "echeance": "2026-06-30",
+      "priorite": "Moyenne",
+      "type": "technique"
+    },
+    {
+      "id": "OBJ-05",
+      "objectif": "Rendre les produits thematiques flood/snow utilisables en routine",
+      "mesure": "Delai median de disponibilite d un produit thematique apres publication",
+      "cible": "<= 2 heures",
+      "echeance": "2026-09-30",
+      "priorite": "Moyenne",
+      "type": "metier"
+    }
+  ],
+  "dependances": [
+    "Disponibilite des sources de donnees multi-source",
+    "Qualite des referentiels stations/bassins/barrages",
+    "Alignement contractuel frontend/backend sur endpoints critiques"
+  ]
+}

@@ -1,0 +1,99 @@
+﻿{
+  "prompt_id": "RC-BUG-001",
+  "date_run": "2026-03-14",
+  "projet": "HydroSentinel",
+  "anomalies": [
+    {
+      "id": "BUG-01",
+      "certitude": "probable",
+      "gravite": "moyenne",
+      "type": "logique",
+      "file": "backend/app/api/v1/endpoints/admin_new.py",
+      "line": 979,
+      "description": "Cle message dupliquee dans la reponse dry_run upload_shp.",
+      "scenario": "Le dictionnaire Python est construit avec deux cles identiques.",
+      "impact": "Ecrasement silencieux de la premiere valeur.",
+      "correctif_recommande": "Conserver une seule cle message dans la reponse."
+    },
+    {
+      "id": "BUG-02",
+      "certitude": "probable",
+      "gravite": "elevee",
+      "type": "concurrence",
+      "file": "hydro-sentinel/src/pages/DataManagement.tsx",
+      "line": 1509,
+      "description": "Appels analyzeFile multiples sur changements UI sans annulation.",
+      "scenario": "Changement rapide mode/station/variable/fichier.",
+      "impact": "Risque de reponse hors ordre et etat analysisReport stale.",
+      "correctif_recommande": "Debounce + annulation requete precedente."
+    },
+    {
+      "id": "BUG-03",
+      "certitude": "probable",
+      "gravite": "moyenne",
+      "type": "render",
+      "file": "hydro-sentinel/src/pages/DataManagement.tsx",
+      "line": 1235,
+      "description": "Math.random() utilise pour les keys de liste.",
+      "scenario": "Rerender de la liste des stations.",
+      "impact": "Remount non necessaire et perte potentielle d'etat local.",
+      "correctif_recommande": "Utiliser station_id/basin_id comme key stable."
+    },
+    {
+      "id": "BUG-04",
+      "certitude": "possible",
+      "gravite": "elevee",
+      "type": "io",
+      "file": "backend/app/api/v1/endpoints/admin_new.py",
+      "line": 944,
+      "description": "Extraction ZIP via extractall sans validation des chemins internes.",
+      "scenario": "Upload archive contenant chemins ../.",
+      "impact": "Risque d'ecriture hors dossier temporaire.",
+      "correctif_recommande": "Valider chaque membre ZIP avant extraction."
+    },
+    {
+      "id": "BUG-05",
+      "certitude": "probable",
+      "gravite": "moyenne",
+      "type": "io",
+      "file": "backend/app/api/v1/endpoints/admin_new.py",
+      "line": 940,
+      "description": "Lecture complete des fichiers upload en memoire.",
+      "scenario": "Fichier SHP/ZIP volumineux.",
+      "impact": "Pic memoire et latence/timeout backend.",
+      "correctif_recommande": "Passer en traitement stream/chunk avec limites taille."
+    },
+    {
+      "id": "BUG-06",
+      "certitude": "probable",
+      "gravite": "faible",
+      "type": "logique",
+      "file": "backend/app/api/v1/endpoints/admin_new.py",
+      "line": 247,
+      "description": "Suppression dss_mapping dupliquee dans delete_entity.",
+      "scenario": "Suppression station.",
+      "impact": "Surcout DB et ambiguite fonctionnelle.",
+      "correctif_recommande": "Retirer le bloc duplique."
+    },
+    {
+      "id": "BUG-07",
+      "certitude": "possible",
+      "gravite": "moyenne",
+      "type": "exception",
+      "file": "backend/app/api/v1/endpoints/admin_new.py",
+      "line": 250,
+      "description": "Usage de except/pass a plusieurs endroits.",
+      "scenario": "Erreur DB/lib lors operations secondaires.",
+      "impact": "Perte de signal d'erreur et diagnostic difficile.",
+      "correctif_recommande": "Exceptions ciblees + logs techniques."
+    }
+  ],
+  "score_robustesse": {
+    "cas_limites": 5,
+    "validation_entrees": 6,
+    "gestion_erreurs": 5,
+    "fiabilite_flux": 6,
+    "global": 5.4
+  },
+  "decision": "RISQUE_MODERE"
+}

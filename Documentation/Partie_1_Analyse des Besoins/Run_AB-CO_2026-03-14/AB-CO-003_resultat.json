@@ -1,0 +1,61 @@
+﻿{
+  "prompt_id": "AB-CO-003",
+  "nom": "Identifier les indicateurs de succes",
+  "date_run": "2026-03-14",
+  "kpis": [
+    {
+      "kpi_id": "KPI-01",
+      "nom": "Temps de comprehension situation",
+      "objectif_lie": "OBJ-01",
+      "definition": "Duree entre ouverture dashboard et validation de la situation par operateur",
+      "formule": "median(t_validation - t_ouverture)",
+      "source": "Logs frontend + journal usage metier",
+      "frequence": "hebdomadaire",
+      "seuil": "<= 5 min"
+    },
+    {
+      "kpi_id": "KPI-02",
+      "nom": "Couverture decision barrage",
+      "objectif_lie": "OBJ-02",
+      "definition": "Part des barrages prioritaires avec indicateurs decision complets",
+      "formule": "nb_barrages_complets / nb_barrages_prioritaires",
+      "source": "GET /api/v1/map/points-kpi + series temporelles",
+      "frequence": "quotidienne",
+      "seuil": ">= 95%"
+    },
+    {
+      "kpi_id": "KPI-03",
+      "nom": "Continuite series critiques",
+      "objectif_lie": "OBJ-03",
+      "definition": "Part des series critiques sans trou bloquant",
+      "formule": "nb_series_sans_trou_bloquant / nb_series_critiques",
+      "source": "GET /api/v1/admin/data-availability",
+      "frequence": "quotidienne",
+      "seuil": ">= 90%"
+    },
+    {
+      "kpi_id": "KPI-04",
+      "nom": "Fiabilite import",
+      "objectif_lie": "OBJ-04",
+      "definition": "Part des imports executes avec succes sans correction manuelle lourde",
+      "formule": "nb_imports_succes_sans_reprise / nb_imports_totaux",
+      "source": "GET /api/v1/ingest/history + logs admin",
+      "frequence": "hebdomadaire",
+      "seuil": ">= 90%"
+    },
+    {
+      "kpi_id": "KPI-05",
+      "nom": "Disponibilite thematique",
+      "objectif_lie": "OBJ-05",
+      "definition": "Part des produits flood/snow disponibles dans le delai cible",
+      "formule": "nb_produits_sla_ok / nb_produits_total",
+      "source": "GET /api/v1/thematic-maps/*",
+      "frequence": "hebdomadaire",
+      "seuil": ">= 95%"
+    }
+  ],
+  "notes": [
+    "Les KPI-01 et KPI-02 sont prioritaires pour la decision en periode critique.",
+    "Les seuils proposes sont des cibles de cadrage et restent a valider en atelier metier."
+  ]
+}

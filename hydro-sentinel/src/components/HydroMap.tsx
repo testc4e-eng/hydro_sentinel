@@ -23,6 +23,8 @@ interface MapPoint {
   precip_obs_mm: number | null;
   precip_obs_time?: string | null;
   precip_arome_mm?: number | null;
+  precip_ecmwf_mm?: number | null;
+  precip_ecmwf_time?: string | null;
   precip_cum_24h_mm: number | null;
   debit_obs_m3s: number | null;
   debit_sim_m3s: number | null;
@@ -44,17 +46,55 @@ const severityColors = {
   critical: '#ef4444' // red-500
 };
 
-export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage' | 'Poste Pluviométrique' | 'Station hydrologique' | 'point resultats' }) {
+type BasinMode = 'ABH' | 'DGM' | null;
+
+interface HydroMapProps {
+  filterType?: 'all' | 'Barrage' | 'Poste Pluviométrique' | 'Poste Pluviometrique' | 'Station hydrologique' | 'point resultats';
+  bassinsVisible?: boolean;
+  bassinsType?: BasinMode;
+}
+
+interface BasinRecord {
+  id: string;
+  name: string;
+  code: string | null;
+  level: string | number | null;
+  geometry: any;
+}
+
+const BASINS_ABH_SOURCE_ID = 'basins-abh';
+const BASINS_DGM_SOURCE_ID = 'basins-dgm';
+const BASINS_ABH_FILL_LAYER_ID = 'basins-abh-fill';
+const BASINS_ABH_LINE_LAYER_ID = 'basins-abh-outline';
+const BASINS_DGM_FILL_LAYER_ID = 'basins-dgm-fill';
+const BASINS_DGM_LINE_LAYER_ID = 'basins-dgm-outline';
+
+export function HydroMap({ filterType = 'all', bassinsVisible = false, bassinsType = null }: HydroMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const { selectedBasinId, setSelectedBasinId, mapDisplayMode, setMapDisplayMode } = useDashboardStore();
   const [points, setPoints] = React.useState<MapPoint[]>([]);
-  const [basins, setBasins] = React.useState<any[]>([]);
+  const [basinsAbh, setBasinsAbh] = React.useState<any[]>([]);
+  const [basinsDgm, setBasinsDgm] = React.useState<any[]>([]);
+  const [pointsLoading, setPointsLoading] = React.useState(true);
+  const [basinsLoading, setBasinsLoading] = React.useState(false);
+  const [mapError, setMapError] = React.useState<string | null>(null);
   const [sourceMode, setSourceMode] = React.useState<'OBS' | 'SIM'>('OBS');
-  const hasSimulatedData = useMemo(
+  const shouldLoadBasins = bassinsVisible || bassinsType !== null;
+  const hasHydroSimulatedData = useMemo(
     () => points.some((p) => p.debit_sim_m3s !== null || p.volume_sim_hm3 !== null),
     [points]
   );
+  const hasForecastPrecipData = useMemo(
+    () => points.some((p) => p.precip_arome_mm !== null || p.precip_ecmwf_mm !== null),
+    [points]
+  );
+  const canUseSimulatedSource = mapDisplayMode === 'precip' ? hasForecastPrecipData : hasHydroSimulatedData;
+  const normalizeType = (value: string | null | undefined): string =>
+    String(value ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
 
   const escapeHtml = (value: unknown): string => {
     if (value === null || value === undefined) return '--';
@@ -69,6 +109,10 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
   const formatNum = (value: number | null | undefined, digits = 1): string => {
     if (value === null || value === undefined || Number.isNaN(value)) return '--';
     return Number(value).toFixed(digits);
+  };
+  const sameNumericValue = (a: number | null | undefined, b: number | null | undefined): boolean => {
+    if (a === null || a === undefined || b === null || b === undefined) return false;
+    return Math.abs(Number(a) - Number(b)) < 1e-9;
   };
 
   const formatDateTime = (value?: string | null): string => {
@@ -94,58 +138,183 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
     return severity;
   };
 
+  const mapGeoJsonFeaturesToBasins = (features: any[]): BasinRecord[] => {
+    return (features ?? [])
+      .filter((feature: any) => feature?.geometry)
+      .map((feature: any, index: number) => {
+        const props = feature?.properties ?? {};
+        const rawName =
+          props.name ??
+          props.nom ??
+          props.NOM ??
+          props.Name ??
+          props.Name1 ??
+          props.BASSIN ??
+          `Bassin DGM ${index + 1}`;
+        const rawCode = props.code ?? props.CODE ?? props.Code ?? props.id ?? props.ID ?? props.OBJECTID ?? null;
+        return {
+          id: String(rawCode ?? `dgm-${index + 1}`),
+          name: String(rawName),
+          code: rawCode !== null && rawCode !== undefined ? String(rawCode) : null,
+          level: props.level ?? props.niveau ?? null,
+          geometry: feature.geometry,
+        };
+      });
+  };
+
   useEffect(() => {
-    if (!hasSimulatedData && sourceMode === 'SIM') {
+    if (!canUseSimulatedSource && sourceMode === 'SIM') {
       setSourceMode('OBS');
     }
-  }, [hasSimulatedData, sourceMode]);
+  }, [canUseSimulatedSource, sourceMode]);
 
-  // Fetch points & basins
   useEffect(() => {
-    // Fetch KPI points
-    api.get<MapPoint[]>('/map/points-kpi')
-      .then(res => {
-        console.log("ðŸ—ºï¸ fetched map points:", res.data.length);
-        setPoints(res.data);
-      })
-      .catch(err => console.error("Failed to load map points", err));
-      
-    // Fetch Basins
-    api.get<any[]>('/basins')
-      .then(res => {
-        console.log("ðŸŒ² fetched basins:", res.data.length);
-        setBasins(res.data);
-      })
-      .catch(err => console.error("Failed to load basins", err));
+    let cancelled = false;
+
+    const loadPoints = async () => {
+      setPointsLoading(true);
+      try {
+        const res = await api.get<MapPoint[]>('/map/points-kpi');
+        if (!cancelled) {
+          setPoints(res.data);
+          setMapError(null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Failed to load map points', err);
+          setMapError('Impossible de charger les points de la carte.');
+        }
+      } finally {
+        if (!cancelled) {
+          setPointsLoading(false);
+        }
+      }
+    };
+
+    loadPoints();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  useEffect(() => {
+    if (!shouldLoadBasins) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadBasins = async () => {
+      setBasinsLoading(true);
+      try {
+        const results = await Promise.allSettled([
+          api.get<any[]>('/basins', { params: { provider: 'ABH' } }),
+          api.get<any[]>('/basins', { params: { provider: 'DGM' } }),
+          api.get<any[]>('/basins'),
+          fetch('/data/basins_dgm.geojson', { cache: 'force-cache' }).then((response) => {
+            if (!response.ok) throw new Error(`Failed to load local DGM basins (${response.status})`);
+            return response.json();
+          }),
+        ]);
+
+        if (cancelled) return;
+
+        const [abhRes, dgmRes, legacyRes, localDgmRes] = results;
+        const legacyBasins = legacyRes.status === 'fulfilled' ? legacyRes.value.data ?? [] : [];
+        const abhBasins = abhRes.status === 'fulfilled' ? abhRes.value.data ?? [] : [];
+        const dgmBasins = dgmRes.status === 'fulfilled' ? dgmRes.value.data ?? [] : [];
+        const localDgmBasins =
+          localDgmRes.status === 'fulfilled'
+            ? mapGeoJsonFeaturesToBasins(localDgmRes.value?.features ?? [])
+            : [];
+
+        const hasProviderTag = legacyBasins.some((b: any) => {
+          const provider = String(b?.provider ?? b?.source ?? b?.agency ?? '').toUpperCase();
+          return provider.includes('ABH') || provider.includes('DGM');
+        });
+
+        const splitAbh = hasProviderTag
+          ? legacyBasins.filter((b: any) => String(b?.provider ?? b?.source ?? b?.agency ?? '').toUpperCase().includes('ABH'))
+          : [];
+        const splitDgm = hasProviderTag
+          ? legacyBasins.filter((b: any) => String(b?.provider ?? b?.source ?? b?.agency ?? '').toUpperCase().includes('DGM'))
+          : [];
+
+        const finalAbh = abhBasins.length > 0 ? abhBasins : (splitAbh.length > 0 ? splitAbh : legacyBasins);
+        const finalDgm = localDgmBasins.length > 0
+          ? localDgmBasins
+          : (dgmBasins.length > 0
+            ? dgmBasins
+            : (splitDgm.length > 0 ? splitDgm : legacyBasins));
+
+        setBasinsAbh(finalAbh);
+        setBasinsDgm(finalDgm);
+        setMapError(null);
+      } catch (err) {
+        console.error('Failed to load basins', err);
+        if (!cancelled) {
+          setMapError('Certaines couches cartographiques n\'ont pas pu être chargées.');
+        }
+      } finally {
+        if (!cancelled) {
+          setBasinsLoading(false);
+        }
+      }
+    };
+
+    loadBasins();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [shouldLoadBasins]);
 
   const pointGeoJson = useMemo(() => ({
     type: 'FeatureCollection',
     features: points
       .filter(p => p.lon !== null && p.lat !== null && p.lon !== undefined && p.lat !== undefined)
-      .filter(p => filterType === 'all' || p.station_type === filterType)
+      .filter(p => filterType === 'all' || normalizeType(p.station_type) === normalizeType(filterType))
       .map(p => ({
         type: 'Feature',
         geometry: { type: 'Point', coordinates: [p.lon, p.lat] },
         properties: {
           ...p,
+          precip_val: sourceMode === 'SIM'
+            ? (p.precip_arome_mm ?? p.precip_ecmwf_mm ?? p.precip_cum_24h_mm ?? p.precip_obs_mm)
+            : (p.precip_cum_24h_mm ?? p.precip_obs_mm),
+          precip_source: sourceMode === 'SIM'
+            ? (
+                p.precip_arome_mm !== null && p.precip_arome_mm !== undefined
+                  ? 'AROME'
+                  : (
+                      p.precip_ecmwf_mm !== null && p.precip_ecmwf_mm !== undefined
+                        ? 'ECMWF'
+                        : 'OBS'
+                    )
+              )
+            : 'OBS',
           displayMode: mapDisplayMode,
           source_mode: sourceMode,
           // Computed dynamic properties based on source mode
-          precip_val: p.precip_cum_24h_mm ?? p.precip_obs_mm,
           debit_val: sourceMode === 'SIM' ? p.debit_sim_m3s : p.debit_obs_m3s,
           volume_val: sourceMode === 'SIM' ? p.volume_sim_hm3 : p.volume_hm3_latest,
           // Pre-calculate display checks to simplify expression
-          hasPrecip: (p.precip_cum_24h_mm ?? p.precip_obs_mm) !== null && (p.precip_cum_24h_mm ?? p.precip_obs_mm) !== undefined,
+          hasPrecip: (sourceMode === 'SIM'
+            ? (p.precip_arome_mm ?? p.precip_ecmwf_mm ?? p.precip_cum_24h_mm ?? p.precip_obs_mm)
+            : (p.precip_cum_24h_mm ?? p.precip_obs_mm)) !== null
+            && (sourceMode === 'SIM'
+              ? (p.precip_arome_mm ?? p.precip_ecmwf_mm ?? p.precip_cum_24h_mm ?? p.precip_obs_mm)
+              : (p.precip_cum_24h_mm ?? p.precip_obs_mm)) !== undefined,
           hasDebit: sourceMode === 'SIM' ? (p.debit_sim_m3s !== null && p.debit_sim_m3s !== undefined) : (p.debit_obs_m3s !== null && p.debit_obs_m3s !== undefined),
           hasVolume: sourceMode === 'SIM' ? (p.volume_sim_hm3 !== null && p.volume_sim_hm3 !== undefined) : (p.volume_hm3_latest !== null && p.volume_hm3_latest !== undefined)
         }
       }))
   }), [points, mapDisplayMode, filterType, sourceMode]);
 
-  const basinGeoJson = useMemo(() => ({
+  const basinAbhGeoJson = useMemo(() => ({
     type: 'FeatureCollection',
-    features: basins
+    features: basinsAbh
       .filter(b => b.geometry !== null && b.geometry !== undefined)
       .map(b => ({
         type: 'Feature',
@@ -157,7 +326,39 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
           level: b.level
         }
       }))
-  }), [basins]);
+  }), [basinsAbh]);
+
+  const basinDgmGeoJson = useMemo(() => ({
+    type: 'FeatureCollection',
+    features: basinsDgm
+      .filter(b => b.geometry !== null && b.geometry !== undefined)
+      .map(b => ({
+        type: 'Feature',
+        geometry: b.geometry,
+        properties: {
+          id: b.id,
+          name: b.name,
+          code: b.code,
+          level: b.level
+        }
+      }))
+  }), [basinsDgm]);
+
+  const setBasinsVisibility = (targetMap: maplibregl.Map, visible: boolean, type: BasinMode) => {
+    const abhVisibility = visible && type === 'ABH' ? 'visible' : 'none';
+    const dgmVisibility = visible && type === 'DGM' ? 'visible' : 'none';
+
+    [BASINS_ABH_FILL_LAYER_ID, BASINS_ABH_LINE_LAYER_ID].forEach((layerId) => {
+      if (targetMap.getLayer(layerId)) {
+        targetMap.setLayoutProperty(layerId, 'visibility', abhVisibility);
+      }
+    });
+    [BASINS_DGM_FILL_LAYER_ID, BASINS_DGM_LINE_LAYER_ID].forEach((layerId) => {
+      if (targetMap.getLayer(layerId)) {
+        targetMap.setLayoutProperty(layerId, 'visibility', dgmVisibility);
+      }
+    });
+  };
 
   useEffect(() => {
     if (map.current || !mapContainer.current) return;
@@ -172,9 +373,14 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
     map.current.on('load', () => {
       if (!map.current) return;
 
-      map.current.addSource('basins', {
+      map.current.addSource(BASINS_ABH_SOURCE_ID, {
         type: 'geojson',
-        data: basinGeoJson as any
+        data: basinAbhGeoJson as any
+      });
+
+      map.current.addSource(BASINS_DGM_SOURCE_ID, {
+        type: 'geojson',
+        data: basinDgmGeoJson as any
       });
 
       map.current.addSource('stations', {
@@ -182,25 +388,47 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
         data: pointGeoJson as any
       });
 
-      // Basin Fill Layer
       map.current.addLayer({
-        id: 'basins-fill',
+        id: BASINS_ABH_FILL_LAYER_ID,
         type: 'fill',
-        source: 'basins',
+        source: BASINS_ABH_SOURCE_ID,
+        layout: { visibility: 'none' },
         paint: {
-          'fill-color': '#0369a1', // sky-700
-          'fill-opacity': 0.15
+          'fill-color': '#3B82F6',
+          'fill-opacity': 0.2
         }
       });
 
-      // Basin Outline Layer
       map.current.addLayer({
-        id: 'basins-outline',
+        id: BASINS_ABH_LINE_LAYER_ID,
         type: 'line',
-        source: 'basins',
+        source: BASINS_ABH_SOURCE_ID,
+        layout: { visibility: 'none' },
         paint: {
-          'line-color': '#0ea5e9', // sky-500
-          'line-width': 1.5
+          'line-color': '#3B82F6',
+          'line-width': 2
+        }
+      });
+
+      map.current.addLayer({
+        id: BASINS_DGM_FILL_LAYER_ID,
+        type: 'fill',
+        source: BASINS_DGM_SOURCE_ID,
+        layout: { visibility: 'none' },
+        paint: {
+          'fill-color': '#10B981',
+          'fill-opacity': 0.2
+        }
+      });
+
+      map.current.addLayer({
+        id: BASINS_DGM_LINE_LAYER_ID,
+        type: 'line',
+        source: BASINS_DGM_SOURCE_ID,
+        layout: { visibility: 'none' },
+        paint: {
+          'line-color': '#10B981',
+          'line-width': 2
         }
       });
 
@@ -238,17 +466,17 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
             ['==', ['get', 'displayMode'], 'precip'],
             ['case',
                 ['==', ['get', 'precip_val'], null], '#9ca3af', // Gray only when no data
+                ['<=', ['get', 'precip_val'], 0], '#dbeafe',
+                ['<=', ['get', 'precip_val'], 0.2], '#3b82f6',
                 [
                   'interpolate',
                   ['linear'],
                   ['get', 'precip_val'],
-                  0, '#dbeafe',
-                  0.2, '#93c5fd',
-                  1, '#60a5fa',
-                  5, '#3b82f6',
-                  15, '#1d4ed8',
-                  30, '#1e3a8a',
-                  50, '#4c1d95',
+                  0.2, '#3b82f6',
+                  1, '#2563eb',
+                  5, '#1d4ed8',
+                  15, '#1e3a8a',
+                  30, '#4c1d95',
                   100, '#be185d' // Pink/Red for extreme
                 ]
             ],
@@ -338,7 +566,9 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
         useDashboardStore.getState().setSelectedBasinId(props.station_id);
 
         const coordinates = (feature.geometry as any).coordinates.slice();
-        const sourceModeLabel = dynamicProps.source_mode === 'SIM' ? 'SIM' : 'OBS';
+        const sourceModeLabel = dynamicProps.displayMode === 'precip'
+          ? (dynamicProps.source_mode === 'SIM' ? (dynamicProps.precip_source || 'PREV') : 'OBS')
+          : (dynamicProps.source_mode === 'SIM' ? 'SIM' : 'OBS');
         const basinLabel = props.basin_name
           ? `${escapeHtml(props.basin_name)}${props.basin_code ? ` (${escapeHtml(props.basin_code)})` : ''}`
           : '';
@@ -374,15 +604,20 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
         if (props.precip_arome_mm !== null && props.precip_arome_mm !== undefined) {
           dataRows.push(toRow('Pluie AROME', `${formatNum(props.precip_arome_mm, 1)} mm`));
         }
+        if (props.precip_ecmwf_mm !== null && props.precip_ecmwf_mm !== undefined) {
+          dataRows.push(toRow('Pluie ECMWF', `${formatNum(props.precip_ecmwf_mm, 1)} mm`));
+        }
         if (props.precip_obs_time) dataRows.push(toRow('Date pluie', escapeHtml(formatDateTime(props.precip_obs_time))));
 
         if (dynamicProps.debit_val !== null && dynamicProps.debit_val !== undefined) {
           dataRows.push(toRow(`Debit (${sourceModeLabel})`, `${formatNum(Number(dynamicProps.debit_val), 2)} m3/s`));
         }
-        if (props.debit_obs_m3s !== null && props.debit_obs_m3s !== undefined) {
+        const isActiveObsDebit = dynamicProps.source_mode === 'OBS' && sameNumericValue(props.debit_obs_m3s, Number(dynamicProps.debit_val));
+        const isActiveSimDebit = dynamicProps.source_mode === 'SIM' && sameNumericValue(props.debit_sim_m3s, Number(dynamicProps.debit_val));
+        if (props.debit_obs_m3s !== null && props.debit_obs_m3s !== undefined && !isActiveObsDebit) {
           dataRows.push(toRow('Debit OBS', `${formatNum(props.debit_obs_m3s, 2)} m3/s`));
         }
-        if (props.debit_sim_m3s !== null && props.debit_sim_m3s !== undefined) {
+        if (props.debit_sim_m3s !== null && props.debit_sim_m3s !== undefined && !isActiveSimDebit) {
           dataRows.push(toRow('Debit SIM', `${formatNum(props.debit_sim_m3s, 2)} m3/s`));
         }
         if (props.debit_max_24h_m3s !== null && props.debit_max_24h_m3s !== undefined) {
@@ -402,10 +637,12 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
           if (dynamicProps.volume_val !== null && dynamicProps.volume_val !== undefined) {
             dataRows.push(toRow(`Volume (${sourceModeLabel})`, `${formatNum(Number(dynamicProps.volume_val), 2)} hm3`));
           }
-          if (props.volume_obs_hm3 !== null && props.volume_obs_hm3 !== undefined) {
+          const isActiveObsVolume = dynamicProps.source_mode === 'OBS' && sameNumericValue(props.volume_obs_hm3, Number(dynamicProps.volume_val));
+          const isActiveSimVolume = dynamicProps.source_mode === 'SIM' && sameNumericValue(props.volume_sim_hm3, Number(dynamicProps.volume_val));
+          if (props.volume_obs_hm3 !== null && props.volume_obs_hm3 !== undefined && !isActiveObsVolume) {
             dataRows.push(toRow('Volume OBS', `${formatNum(props.volume_obs_hm3, 2)} hm3`));
           }
-          if (props.volume_sim_hm3 !== null && props.volume_sim_hm3 !== undefined) {
+          if (props.volume_sim_hm3 !== null && props.volume_sim_hm3 !== undefined && !isActiveSimVolume) {
             dataRows.push(toRow('Volume SIM', `${formatNum(props.volume_sim_hm3, 2)} hm3`));
           }
           if (props.volume_hm3_time) dataRows.push(toRow('Date volume', escapeHtml(formatDateTime(props.volume_hm3_time))));
@@ -437,8 +674,10 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
           `)
           .addTo(map.current!);
       });
+
+      setBasinsVisibility(map.current, bassinsVisible, bassinsType);
     });
-  }, []);
+  }, [basinAbhGeoJson, basinDgmGeoJson, bassinsVisible, bassinsType, pointGeoJson]);
 
   // Update source data when points change or mode changes
   useEffect(() => {
@@ -448,14 +687,37 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
   }, [pointGeoJson]);
 
   useEffect(() => {
-    if (map.current && map.current.getSource('basins')) {
-      (map.current.getSource('basins') as maplibregl.GeoJSONSource).setData(basinGeoJson as any);
+    if (map.current && map.current.getSource(BASINS_ABH_SOURCE_ID)) {
+      (map.current.getSource(BASINS_ABH_SOURCE_ID) as maplibregl.GeoJSONSource).setData(basinAbhGeoJson as any);
     }
-  }, [basinGeoJson]);
+  }, [basinAbhGeoJson]);
+
+  useEffect(() => {
+    if (map.current && map.current.getSource(BASINS_DGM_SOURCE_ID)) {
+      (map.current.getSource(BASINS_DGM_SOURCE_ID) as maplibregl.GeoJSONSource).setData(basinDgmGeoJson as any);
+    }
+  }, [basinDgmGeoJson]);
+
+  useEffect(() => {
+    if (!map.current) return;
+    setBasinsVisibility(map.current, bassinsVisible, bassinsType);
+  }, [bassinsVisible, bassinsType]);
 
   return (
     <div className="relative w-full h-full rounded-lg overflow-hidden border">
       <div ref={mapContainer} className="w-full h-full" />
+      {(pointsLoading || basinsLoading) && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/40 backdrop-blur-[1px]">
+          <div className="rounded-lg border bg-background/95 px-4 py-3 text-sm text-muted-foreground shadow-sm">
+            Chargement de la carte...
+          </div>
+        </div>
+      )}
+      {mapError && (
+        <div className="absolute bottom-4 left-4 z-20 max-w-sm rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 shadow-sm">
+          {mapError}
+        </div>
+      )}
       
       {/* Map Control - Top Right */}
       <div className="absolute top-4 right-4 bg-background/90 backdrop-blur-sm p-2 rounded-md shadow-md border z-10 w-36">
@@ -469,10 +731,10 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
           </button>
           <button 
             onClick={() => setSourceMode('SIM')}
-            disabled={!hasSimulatedData}
-            title={!hasSimulatedData ? 'Aucune donnee simulee disponible' : undefined}
+            disabled={!canUseSimulatedSource}
+            title={!canUseSimulatedSource ? (mapDisplayMode === 'precip' ? 'Aucune prevision disponible' : 'Aucune donnee simulee disponible') : undefined}
             className={`flex-1 text-[10px] py-1 rounded transition-colors ${
-              !hasSimulatedData
+              !canUseSimulatedSource
                 ? 'text-muted-foreground/50 cursor-not-allowed'
                 : sourceMode === 'SIM'
                   ? 'bg-background shadow-sm border font-bold text-foreground'
@@ -482,9 +744,11 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
             Simulé
           </button>
         </div>
-        {!hasSimulatedData && (
+        {!canUseSimulatedSource && (
           <div className="text-[10px] text-muted-foreground px-1 mb-2">
-            Pas de donnees simulees dans la base.
+            {mapDisplayMode === 'precip'
+              ? 'Pas de previsions AROME/ECMWF dans la base.'
+              : 'Pas de donnees simulees dans la base.'}
           </div>
         )}
 
@@ -544,6 +808,20 @@ export function HydroMap({ filterType = 'all' }: { filterType?: 'all' | 'Barrage
             )}
             {mapDisplayMode === 'volume' && (
                <div className="w-full h-2 rounded bg-gradient-to-r from-orange-100 via-orange-500 to-orange-900"></div>
+            )}
+            {bassinsVisible && bassinsType && (
+              <div className="mt-1 flex items-center gap-2">
+                <div
+                  className="h-3 w-3 rounded-sm border"
+                  style={{
+                    backgroundColor: bassinsType === 'ABH' ? 'rgba(59,130,246,0.2)' : 'rgba(16,185,129,0.2)',
+                    borderColor: bassinsType === 'ABH' ? '#3B82F6' : '#10B981'
+                  }}
+                />
+                <span className="text-[10px]">
+                  {bassinsType === 'ABH' ? 'Bassins ABH' : 'Bassins DGM'}
+                </span>
+              </div>
             )}
           </div>
         </div>

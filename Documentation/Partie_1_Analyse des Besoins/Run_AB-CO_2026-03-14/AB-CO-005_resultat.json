@@ -1,0 +1,35 @@
+﻿{
+  "prompt_id": "AB-CO-005",
+  "nom": "Definir le perimetre initial",
+  "date_run": "2026-03-14",
+  "in_scope_v1": [
+    "Dashboard principal: carte, KPI, top vigilance",
+    "Analyses precipitations, debits, apports, volume",
+    "Recapitulatif barrage multi-series",
+    "Import/ingestion et administration des donnees",
+    "Cartes thematiques flood/snow avec historique"
+  ],
+  "out_of_scope_v1": [
+    "Extension nationale hors bassin du Sebou",
+    "Automatisation complete de decision sans validation humaine",
+    "Refonte complete de l architecture de stockage"
+  ],
+  "mvp": {
+    "description": "Stabilisation de la chaine decisionnelle Sebou sur parcours critiques",
+    "priorites": [
+      "Fiabilite dashboard principal",
+      "Qualite series critiques barrage",
+      "Parcours import/admin robustes"
+    ]
+  },
+  "dependances_critiques": [
+    "Disponibilite des vues et tables SQL metier",
+    "Qualite geometrique stations/bassins/barrages",
+    "Resolution des ecarts endpoints legacy frontend/backend"
+  ],
+  "points_arbitrage": [
+    "Niveau de SLA cible pour produits thematiques",
+    "Seuils metier d alerte et de criticite definitifs",
+    "Politique de priorisation en cas de donnees partielles"
+  ]
+}

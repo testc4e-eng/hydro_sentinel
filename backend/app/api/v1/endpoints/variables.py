@@ -2,16 +2,13 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
 from app.db.session import get_db
-from app.api.deps import get_current_user
-from app.models.user import User
 from typing import List, Dict, Any
 
 router = APIRouter()
 
 @router.get("/variables")
 async def get_variables(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    db: AsyncSession = Depends(get_db)
 ) -> List[Dict[str, Any]]:
     """
     Get list of available variables from api.v_ref_variable view.

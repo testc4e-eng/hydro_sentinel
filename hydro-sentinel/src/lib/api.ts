@@ -13,7 +13,7 @@ const buildApiRoot = (baseUrl: string, apiPrefix: string): string => {
 };
 
 const apiRoot = buildApiRoot(
-  import.meta.env.VITE_API_BASE_URL || 'http://localhost:8003',
+  import.meta.env.VITE_API_BASE_URL || '',
   import.meta.env.VITE_API_PREFIX || '/api/v1'
 );
 
@@ -50,12 +50,22 @@ export const api = Object.assign(axiosInstance, {
   getStations: (params: any) => axiosInstance.get('/stations', { params }),
 
   getRuns: (params: any) => axiosInstance.get('/measurements/runs', { params }),
-  getBasins: () => axiosInstance.get('/basins'),
+  getBasins: (params?: any) => axiosInstance.get('/basins', { params }),
   getDams: () => axiosInstance.get('/stations', { params: { type: 'barrage' } }), 
   getAlerts: (params: any) => axiosInstance.get('/alerts', { params }), 
   getCompare: (params: any) => axiosInstance.get('/measurements/compare', { params }),
   getKpis: (params: any) => axiosInstance.get('/map/points-kpi', { params }),
   getIngestions: () => axiosInstance.get('/ingestions'),
+  getThematicMapCatalog: (
+    mapType: 'flood' | 'snow' | 'precip',
+    params?: { event?: string; date_from?: string; date_to?: string }
+  ) => axiosInstance.get(`/thematic-maps/${mapType}`, { params }).then((res) => res.data),
+  getThematicMapHistory: (
+    mapType: 'flood' | 'snow' | 'precip',
+    params?: { event?: string; date_from?: string; date_to?: string }
+  ) => axiosInstance.get(`/thematic-maps/${mapType}/history`, { params }).then((res) => res.data),
+  getThematicMapProduct: (mapType: 'flood' | 'snow' | 'precip', productId: string) =>
+    axiosInstance.get(`/thematic-maps/${mapType}/products/${productId}`).then((res) => res.data),
   
   // Ingestion API (Integrated)
   uploadAnalysis: (formData: FormData) => axiosInstance.post('/ingest/analyze', formData, {
@@ -70,10 +80,7 @@ export const api = Object.assign(axiosInstance, {
   getEntities: (type: string) => axiosInstance.get(`/admin/entities/${type}`).then(res => res.data),
   createEntity: (type: string, data: any) => axiosInstance.post(`/admin/entities/${type}`, data),
   updateEntity: (type: string, id: string, data: any) => axiosInstance.put(`/admin/entities/${type}/${id}`, data),
-  deleteEntity: (type: string, id: string) => {
-    console.log('Deleting entity:', type, id);
-    return axiosInstance.delete(`/admin/entities/${type}/${id}`);
-  },
+  deleteEntity: (type: string, id: string) => axiosInstance.delete(`/admin/entities/${type}/${id}`),
   
   // Admin API - SHP
   uploadShp: (formData: FormData) => axiosInstance.post('/admin/shp/upload', formData, {
@@ -97,23 +104,75 @@ export const api = Object.assign(axiosInstance, {
   uploadTimeSeries: (formData: FormData) => axiosInstance.post('/admin/timeseries/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
+  uploadSpatialImport: (formData: FormData) => axiosInstance.post('/import/spatial', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
   analyzeTimeSeries: (formData: FormData) => axiosInstance.post('/admin/timeseries/analyze', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
 
   // Smart Template Downloads
-  downloadTemplateSimple: (stationId?: string, variableCode?: string) => {
+  downloadTemplateSimple: (stationId?: string, variableCode?: string, sourceCode?: string) => {
     const params = new URLSearchParams();
     if (stationId) params.append('station_id', stationId);
     if (variableCode) params.append('variable_code', variableCode);
-    return axiosInstance.get(`/admin/templates/simple?${params.toString()}`, { responseType: 'blob' });
+    if (sourceCode) params.append('source_code', sourceCode);
+    const query = params.toString();
+    return axiosInstance.get(`/admin/templates/simple${query ? `?${query}` : ''}`, {
+      responseType: 'blob',
+      timeout: 15000,
+    });
   },
-  downloadTemplateMultiVariable: (stationId?: string) => {
-    const params = stationId ? `?station_id=${stationId}` : '';
-    return axiosInstance.get(`/admin/templates/multi-variable${params}`, { responseType: 'blob' });
+  downloadTemplateSimpleMultiSource: (stationId?: string, variableCode?: string, sourceCodes?: string[]) => {
+    const params = new URLSearchParams();
+    if (stationId) params.append('station_id', stationId);
+    if (variableCode) params.append('variable_code', variableCode);
+    if (sourceCodes?.length) params.append('source_codes', sourceCodes.join(','));
+    const query = params.toString();
+    return axiosInstance.get(`/admin/templates/simple-multi-source${query ? `?${query}` : ''}`, {
+      responseType: 'blob',
+      timeout: 15000,
+    });
   },
-  downloadTemplateMultiStation: (variableCode?: string) => {
-    const params = variableCode ? `?variable_code=${variableCode}` : '';
-    return axiosInstance.get(`/admin/templates/multi-station${params}`, { responseType: 'blob' });
+  downloadTemplateMultiVariable: (stationId?: string, sourceCode?: string) => {
+    const params = new URLSearchParams();
+    if (stationId) params.append('station_id', stationId);
+    if (sourceCode) params.append('source_code', sourceCode);
+    const query = params.toString();
+    return axiosInstance.get(`/admin/templates/multi-variable${query ? `?${query}` : ''}`, {
+      responseType: 'blob',
+      timeout: 15000,
+    });
+  },
+  downloadTemplateMultiVariableMultiSource: (stationId?: string, sourceCodes?: string[]) => {
+    const params = new URLSearchParams();
+    if (stationId) params.append('station_id', stationId);
+    if (sourceCodes?.length) params.append('source_codes', sourceCodes.join(','));
+    const query = params.toString();
+    return axiosInstance.get(`/admin/templates/multi-variable-multi-source${query ? `?${query}` : ''}`, {
+      responseType: 'blob',
+      timeout: 15000,
+    });
+  },
+  downloadTemplateMultiStation: (variableCode?: string, sourceCode?: string) => {
+    const params = new URLSearchParams();
+    if (variableCode) params.append('variable_code', variableCode);
+    if (sourceCode) params.append('source_code', sourceCode);
+    const query = params.toString();
+    return axiosInstance.get(`/admin/templates/multi-station${query ? `?${query}` : ''}`, {
+      responseType: 'blob',
+      timeout: 15000,
+    });
+  },
+  downloadTemplateMultiBasin: (variableCode?: string, sourceCode?: string, basinShape?: string) => {
+    const params = new URLSearchParams();
+    if (variableCode) params.append('variable_code', variableCode);
+    if (sourceCode) params.append('source_code', sourceCode);
+    if (basinShape) params.append('basin_shape', basinShape);
+    const query = params.toString();
+    return axiosInstance.get(`/admin/templates/multi-bassin${query ? `?${query}` : ''}`, {
+      responseType: 'blob',
+      timeout: 15000,
+    });
   },
 });

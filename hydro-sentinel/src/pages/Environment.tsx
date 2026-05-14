@@ -3,8 +3,9 @@ import { Badge } from "@/components/ui/badge";
 import { Globe, Info } from "lucide-react";
 
 export default function Environment() {
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "(même origine)";
   const apiPrefix = import.meta.env.VITE_API_PREFIX || "/api/v1";
+  const fullUrl = apiBaseUrl === "(même origine)" ? apiPrefix : `${apiBaseUrl}${apiPrefix}`;
 
   return (
     <div className="p-4 lg:p-6 space-y-6">
@@ -37,7 +38,7 @@ export default function Environment() {
             <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
               <span className="text-sm font-medium">URL complète</span>
               <code className="text-xs bg-background px-2 py-1 rounded font-mono">
-                {apiBaseUrl}{apiPrefix}
+                {fullUrl}
               </code>
             </div>
           </div>
@@ -67,13 +68,13 @@ export default function Environment() {
               <div className="text-xs text-blue-900 dark:text-blue-100">
                 <p className="font-medium mb-1">Configuration actuelle</p>
                 <p>
-                  Le frontend se connecte à <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">{apiBaseUrl}{apiPrefix}</code>
+                  Le frontend se connecte à <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">{fullUrl}</code>
                 </p>
                 <p className="mt-2">
                   Pour modifier, créez un fichier <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">.env</code> avec :
                 </p>
                 <pre className="mt-1 bg-blue-100 dark:bg-blue-900 p-2 rounded text-xs">
-VITE_API_BASE_URL=http://127.0.0.1:8003
+VITE_API_BASE_URL=http://127.0.0.1:8000
                 </pre>
               </div>
             </div>

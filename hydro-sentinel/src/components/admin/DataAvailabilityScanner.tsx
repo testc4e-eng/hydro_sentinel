@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -6,8 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Input } from "@/components/ui/input";
-import { Loader2, Download, RefreshCw } from "lucide-react";
+import { Loader2, Download, RefreshCw, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { mapDgmBasinsFromScan } from "@/lib/dgmBasinAlignment";
 
 interface SourceAvailability {
   record_count: number;
@@ -82,6 +83,16 @@ interface DataAvailabilityReport {
   };
 }
 
+interface BasinApportRecapRow {
+  basin_id: string;
+  basin_name: string;
+  basin_code: string | null;
+  apport_journalier_mm3: number | null;
+  cumul_apport_mm3: number | null;
+  dernier_apport_horaire_mm3: number | null;
+  dernier_timestamp: string | null;
+}
+
 function joinUrl(base: string, prefix: string) {
   const b = base.replace(/\/+$/, "");
   const p = (prefix || "").startsWith("/") ? prefix : `/${prefix || ""}`;
@@ -128,6 +139,14 @@ function formatStep(seconds: number | null | undefined): string {
   return `${seconds} s`;
 }
 
+function formatMm3(value: number | null | undefined, digits = 4): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return "-";
+  return Number(value).toLocaleString("fr-FR", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+}
+
 type StationCategory = "barrage" | "station" | "other";
 type StationDataFilter = "all" | "with" | "without";
 
@@ -148,7 +167,31 @@ function getStatusLabel(totalRecords: number): string {
   return totalRecords > 0 ? "Avec donnees" : "Sans donnees";
 }
 
-function TimeseriesDetailsTable({ variables }: { variables: Record<string, VariableAvailability> }) {
+interface DeleteSourcePayload {
+  entityType: "station" | "basin";
+  entityId: string;
+  entityName: string;
+  variableCode: string;
+  sourceCode: string;
+  firstRecord?: string | null;
+  lastRecord?: string | null;
+}
+
+function TimeseriesDetailsTable({
+  variables,
+  entityType,
+  entityId,
+  entityName,
+  onDeleteSource,
+  deletingKey,
+}: {
+  variables: Record<string, VariableAvailability>;
+  entityType?: "station" | "basin";
+  entityId?: string;
+  entityName?: string;
+  onDeleteSource?: (payload: DeleteSourcePayload) => Promise<void>;
+  deletingKey?: string | null;
+}) {
   const rows = useMemo(() => {
     return Object.entries(variables)
       .sort(([left], [right]) => left.localeCompare(right))
@@ -176,6 +219,7 @@ function TimeseriesDetailsTable({ variables }: { variables: Record<string, Varia
           <TableHead>Source</TableHead>
           <TableHead>Enregistrements</TableHead>
           <TableHead>Periode</TableHead>
+          {onDeleteSource && entityId && entityType ? <TableHead className="text-right">Action</TableHead> : null}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -185,6 +229,35 @@ function TimeseriesDetailsTable({ variables }: { variables: Record<string, Varia
             <TableCell>{row.sourceCode}</TableCell>
             <TableCell>{formatCount(row.recordCount)}</TableCell>
             <TableCell>{formatPeriod(row.firstRecord, row.lastRecord)}</TableCell>
+            {onDeleteSource && entityId && entityType ? (
+              <TableCell className="text-right">
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  className="h-8"
+                  disabled={deletingKey === `${entityType}:${entityId}:${row.variableCode}:${row.sourceCode}`}
+                  onClick={() =>
+                    onDeleteSource({
+                      entityType,
+                      entityId,
+                      entityName: entityName || entityId,
+                      variableCode: row.variableCode,
+                      sourceCode: row.sourceCode,
+                      firstRecord: row.firstRecord,
+                      lastRecord: row.lastRecord,
+                    })
+                  }
+                >
+                  {deletingKey === `${entityType}:${entityId}:${row.variableCode}:${row.sourceCode}` ? (
+                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                  ) : (
+                    <Trash2 className="mr-1 h-3 w-3" />
+                  )}
+                  Supprimer
+                </Button>
+              </TableCell>
+            ) : null}
           </TableRow>
         ))}
       </TableBody>
@@ -193,24 +266,102 @@ function TimeseriesDetailsTable({ variables }: { variables: Record<string, Varia
 }
 
 export function DataAvailabilityScanner() {
+  const SCAN_TIMEOUT_MS = 15000;
   const [loading, setLoading] = useState(false);
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
   const [report, setReport] = useState<DataAvailabilityReport | null>(null);
   const [stationFilter, setStationFilter] = useState("");
   const [basinFilter, setBasinFilter] = useState("");
+  const [basinShape, setBasinShape] = useState<"ABH" | "DGM">("ABH");
+  const [dgmBasinEntities, setDgmBasinEntities] = useState<BasinEntityAvailability[]>([]);
   const [stationTypeFilter, setStationTypeFilter] = useState<StationCategory | "all">("all");
   const [stationDataFilter, setStationDataFilter] = useState<StationDataFilter>("all");
+  const [basinApportRecapRows, setBasinApportRecapRows] = useState<BasinApportRecapRow[]>([]);
   const { toast } = useToast();
 
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8003";
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "";
   const apiPrefix = import.meta.env.VITE_API_PREFIX || "/api/v1";
 
+  const apiRoot = useMemo(() => joinUrl(apiBaseUrl, apiPrefix), [apiBaseUrl, apiPrefix]);
+
   const endpoint = useMemo(() => {
-    const apiRoot = joinUrl(apiBaseUrl, apiPrefix);
-    return `${apiRoot}/admin/data-availability`;
-  }, [apiBaseUrl, apiPrefix]);
+    return `${apiRoot}/admin/data-availability?include_time_stats=false`;
+  }, [apiRoot]);
 
   const stationEntities = useMemo(() => report?.station_entities ?? [], [report]);
   const basinEntities = useMemo(() => report?.basin_entities ?? [], [report]);
+  useEffect(() => {
+    let cancelled = false;
+    const loadDgmBasins = async () => {
+      try {
+        const response = await fetch(`/data/basins_dgm.geojson?v=${Date.now()}`);
+        if (!response.ok) {
+          if (!cancelled) setDgmBasinEntities([]);
+          return;
+        }
+        const geojson = await response.json();
+        const features = Array.isArray(geojson?.features) ? geojson.features : [];
+        const mapped = mapDgmBasinsFromScan(features, basinEntities as any, stationEntities as any).map((row) => ({
+          basin_id: row.basin_id || row.option_id,
+          basin_code: row.basin_code,
+          basin_name: row.basin_name,
+          level: row.level,
+          total_records: row.total_records,
+          variable_count: row.variable_count,
+          source_count: row.source_count,
+          first_record: row.first_record,
+          last_record: row.last_record,
+          variables: row.variables,
+        })) as BasinEntityAvailability[];
+
+        if (!cancelled) setDgmBasinEntities(mapped);
+      } catch {
+        if (!cancelled) setDgmBasinEntities([]);
+      }
+    };
+    loadDgmBasins();
+    return () => {
+      cancelled = true;
+    };
+  }, [basinEntities, stationEntities]);
+
+  const basinEntitiesByShape = useMemo(
+    () => (basinShape === "ABH" ? basinEntities : dgmBasinEntities),
+    [basinEntities, basinShape, dgmBasinEntities],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadApportRecap = async () => {
+      try {
+        const res = await fetch(
+          `${apiRoot}/admin/data-availability/basins/apports-recap?shape=${encodeURIComponent(basinShape)}`,
+          { headers: { Accept: "application/json" } },
+        );
+        if (!res.ok) {
+          if (!cancelled) setBasinApportRecapRows([]);
+          return;
+        }
+        const payload = await res.json();
+        const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+        if (!cancelled) {
+          setBasinApportRecapRows(rows as BasinApportRecapRow[]);
+        }
+      } catch {
+        if (!cancelled) setBasinApportRecapRows([]);
+      }
+    };
+
+    if (!report) {
+      setBasinApportRecapRows([]);
+      return;
+    }
+    loadApportRecap();
+    return () => {
+      cancelled = true;
+    };
+  }, [apiRoot, basinShape, report]);
+
   const variableTimeStats = useMemo(() => report?.summary.variable_time_stats ?? [], [report]);
 
   const stationsWithData = useMemo(() => {
@@ -269,21 +420,24 @@ export function DataAvailabilityScanner() {
 
   const filteredBasinEntities = useMemo(() => {
     const q = basinFilter.trim().toLowerCase();
-    if (!q) return basinEntities;
+    if (!q) return basinEntitiesByShape;
 
-    return basinEntities.filter((entity) =>
+    return basinEntitiesByShape.filter((entity) =>
       [entity.basin_name, entity.basin_code, entity.level?.toString()]
         .filter(Boolean)
         .some((value) => (value ?? "").toLowerCase().includes(q)),
     );
-  }, [basinEntities, basinFilter]);
+  }, [basinEntitiesByShape, basinFilter]);
 
   const scanData = async () => {
     setLoading(true);
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), SCAN_TIMEOUT_MS);
     try {
       const res = await fetch(endpoint, {
         method: "GET",
         headers: { Accept: "application/json" },
+        signal: controller.signal,
       });
 
       if (!res.ok) {
@@ -299,13 +453,76 @@ export function DataAvailabilityScanner() {
         description: `${formatCount(data.summary?.total_records)} enregistrements analyses`,
       });
     } catch (e: any) {
+      const errorMessage =
+        e?.name === "AbortError"
+          ? `Timeout: le scan a depasse ${SCAN_TIMEOUT_MS / 1000}s.`
+          : (e?.message || "Impossible de scanner les donnees");
       toast({
         title: "Erreur",
-        description: e?.message || "Impossible de scanner les donnees",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
+      window.clearTimeout(timeoutId);
       setLoading(false);
+    }
+  };
+
+  const deleteSourceSeries = async ({
+    entityType,
+    entityId,
+    entityName,
+    variableCode,
+    sourceCode,
+    firstRecord,
+    lastRecord,
+  }: DeleteSourcePayload) => {
+    const scope = entityType === "station" ? "station" : "bassin";
+    const confirmed = window.confirm(
+      `Supprimer les donnees ${scope} pour ${entityName} - ${variableCode}/${sourceCode}${firstRecord && lastRecord ? ` (${formatPeriod(firstRecord, lastRecord)})` : ""} ?`,
+    );
+    if (!confirmed) return;
+
+    const key = `${entityType}:${entityId}:${variableCode}:${sourceCode}`;
+    setDeletingKey(key);
+
+    try {
+      const basePath = entityType === "station"
+        ? `${apiRoot}/admin/data-availability/stations/${encodeURIComponent(entityId)}/variables/${encodeURIComponent(variableCode)}/sources/${encodeURIComponent(sourceCode)}`
+        : `${apiRoot}/admin/data-availability/basins/${encodeURIComponent(entityId)}/variables/${encodeURIComponent(variableCode)}/sources/${encodeURIComponent(sourceCode)}`;
+      const qs = new URLSearchParams();
+      if (entityType === "station") {
+        if (firstRecord) qs.set("start_time", firstRecord);
+        if (lastRecord) qs.set("end_time", lastRecord);
+      }
+      const deleteEndpoint = qs.toString() ? `${basePath}?${qs.toString()}` : basePath;
+      const res = await fetch(deleteEndpoint, {
+        method: "DELETE",
+        headers: { Accept: "application/json" },
+      });
+
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(`HTTP ${res.status} - ${txt || res.statusText}`);
+      }
+
+      const payload = (await res.json().catch(() => null)) as { deleted_count?: number } | null;
+      const deletedCount = payload?.deleted_count ?? 0;
+
+      toast({
+        title: "Suppression reussie",
+        description: `${formatCount(deletedCount)} enregistrements supprimes pour ${entityName} (${variableCode}/${sourceCode}).`,
+      });
+
+      await scanData();
+    } catch (e: any) {
+      toast({
+        title: "Erreur de suppression",
+        description: e?.message || "Impossible de supprimer cette source.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingKey(null);
     }
   };
 
@@ -645,8 +862,11 @@ export function DataAvailabilityScanner() {
                           <p className="py-4 text-sm text-muted-foreground">Aucune station ne correspond au filtre.</p>
                         ) : (
                           <Accordion type="multiple" className="w-full">
-                            {filteredStationEntities.map((station) => (
-                              <AccordionItem key={station.station_id} value={station.station_id}>
+                            {filteredStationEntities.map((station, index) => (
+                              <AccordionItem
+                                key={`${station.station_id}-${station.station_code ?? "no-code"}-${index}`}
+                                value={`station-${station.station_id}-${index}`}
+                              >
                                 <AccordionTrigger className="hover:no-underline">
                                   <div className="flex w-full flex-col gap-2 pr-4 text-left md:flex-row md:items-center md:justify-between">
                                     <div>
@@ -674,7 +894,14 @@ export function DataAvailabilityScanner() {
                                   <p className="text-xs text-muted-foreground">
                                     Periode: {formatPeriod(station.first_record, station.last_record)}
                                   </p>
-                                  <TimeseriesDetailsTable variables={station.variables} />
+                                  <TimeseriesDetailsTable
+                                    variables={station.variables}
+                                    entityType="station"
+                                    entityId={station.station_id}
+                                    entityName={station.station_name}
+                                    onDeleteSource={deleteSourceSeries}
+                                    deletingKey={deletingKey}
+                                  />
                                 </AccordionContent>
                               </AccordionItem>
                             ))}
@@ -684,19 +911,79 @@ export function DataAvailabilityScanner() {
                     </TabsContent>
 
                     <TabsContent value="basins" className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">Shape :</span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={basinShape === "ABH" ? "default" : "outline"}
+                          onClick={() => setBasinShape("ABH")}
+                        >
+                          ABH
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={basinShape === "DGM" ? "default" : "outline"}
+                          onClick={() => setBasinShape("DGM")}
+                        >
+                          DGM
+                        </Button>
+                      </div>
                       <Input
                         placeholder="Filtrer par nom, code ou niveau"
                         value={basinFilter}
                         onChange={(event) => setBasinFilter(event.target.value)}
                       />
 
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">Recap apports ({basinShape})</CardTitle>
+                          <CardDescription>
+                            apport (j) = SUM(flow_m3s * 3600 / 1 000 000) sur le dernier jour disponible,
+                            cumul apport = somme cumulative, apport (h) = derniere valeur horaire convertie.
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          {basinApportRecapRows.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">Aucune valeur de debit disponible pour calculer les apports.</p>
+                          ) : (
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Bassin</TableHead>
+                                  <TableHead className="text-right">apport (j) Mm3</TableHead>
+                                  <TableHead className="text-right">cumul apport Mm3</TableHead>
+                                  <TableHead className="text-right">apport (h) Mm3</TableHead>
+                                  <TableHead>Dernier point</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {basinApportRecapRows.map((row, index) => (
+                                  <TableRow key={`apport-recap-${row.basin_id}-${row.basin_code ?? "no-code"}-${index}`}>
+                                    <TableCell className="font-medium">{row.basin_name}</TableCell>
+                                    <TableCell className="text-right">{formatMm3(row.apport_journalier_mm3, 4)}</TableCell>
+                                    <TableCell className="text-right">{formatMm3(row.cumul_apport_mm3, 4)}</TableCell>
+                                    <TableCell className="text-right">{formatMm3(row.dernier_apport_horaire_mm3, 6)}</TableCell>
+                                    <TableCell>{formatDate(row.dernier_timestamp)}</TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          )}
+                        </CardContent>
+                      </Card>
+
                       <div className="rounded-md border px-4">
                         {filteredBasinEntities.length === 0 ? (
                           <p className="py-4 text-sm text-muted-foreground">Aucun bassin ne correspond au filtre.</p>
                         ) : (
                           <Accordion type="multiple" className="w-full">
-                            {filteredBasinEntities.map((basin) => (
-                              <AccordionItem key={basin.basin_id} value={basin.basin_id}>
+                            {filteredBasinEntities.map((basin, index) => (
+                              <AccordionItem
+                                key={`${basin.basin_id}-${basin.basin_code ?? "no-code"}-${basin.basin_name}-${index}`}
+                                value={`basin-${basin.basin_id}-${index}`}
+                              >
                                 <AccordionTrigger className="hover:no-underline">
                                   <div className="flex w-full flex-col gap-2 pr-4 text-left md:flex-row md:items-center md:justify-between">
                                     <div>
@@ -720,7 +1007,14 @@ export function DataAvailabilityScanner() {
                                   <p className="text-xs text-muted-foreground">
                                     Periode: {formatPeriod(basin.first_record, basin.last_record)}
                                   </p>
-                                  <TimeseriesDetailsTable variables={basin.variables} />
+                                  <TimeseriesDetailsTable
+                                    variables={basin.variables}
+                                    entityType="basin"
+                                    entityId={basin.basin_id}
+                                    entityName={basin.basin_name}
+                                    onDeleteSource={deleteSourceSeries}
+                                    deletingKey={deletingKey}
+                                  />
                                 </AccordionContent>
                               </AccordionItem>
                             ))}

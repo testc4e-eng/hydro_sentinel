@@ -1,0 +1,26 @@
+﻿{
+  "prompt_id": "CT-MOD-001",
+  "date_run": "2026-03-14",
+  "projet": "HydroSentinel",
+  "modules": [
+    {"id":"M1","nom":"Auth_Acces","type":"transverse","priorite":"critique","mvp":true},
+    {"id":"M2","nom":"Referentiel_Geo","type":"metier","priorite":"critique","mvp":true},
+    {"id":"M3","nom":"Mesures_Timeseries","type":"metier","priorite":"critique","mvp":true},
+    {"id":"M4","nom":"Dashboard_KPI","type":"metier","priorite":"critique","mvp":true},
+    {"id":"M5","nom":"Analyse_MultiSource","type":"metier","priorite":"important","mvp":true},
+    {"id":"M6","nom":"Ingestion_Import","type":"technique","priorite":"critique","mvp":true},
+    {"id":"M7","nom":"Data_Quality_Scan","type":"transverse","priorite":"important","mvp":true},
+    {"id":"M8","nom":"Thematique_Flood_Snow","type":"metier","priorite":"important","mvp":true},
+    {"id":"M9","nom":"Observabilite_Audit","type":"transverse","priorite":"important","mvp":false}
+  ],
+  "ordre_execution": [
+    "Sprint A: M4 + M3 + M6",
+    "Sprint B: M2 + M7",
+    "Sprint C: M8 + M9"
+  ],
+  "risques_couplage": [
+    "melange logique KPI et mesure brute",
+    "chevauchement import vs qualite",
+    "absence observabilite transversale forte"
+  ]
+}

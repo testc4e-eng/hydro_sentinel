@@ -1,0 +1,29 @@
+﻿{
+  "prompt_id": "CT-DB-001",
+  "date_run": "2026-03-14",
+  "projet": "HydroSentinel",
+  "entites_cles": [
+    "Station","Basin","Barrage","Variable","Source","Measurement","BasinMeasurement","User","IngestionHistory","SebouFloodExtent","SebouSnowExtent"
+  ],
+  "contraintes_data": [
+    "integrite referentielle stricte",
+    "unicite temporelle composite avec source/run",
+    "tracabilite source obligatoire",
+    "coherence geometrique SRID"
+  ],
+  "mvp": [
+    "geo/ref/ts/auth/api vues KPI",
+    "parcours import/admin essentiels",
+    "thematique de base"
+  ],
+  "cible": [
+    "versioning complet schemas core",
+    "qualite automatisee",
+    "optimisation lecture analytique"
+  ],
+  "risques": [
+    "couplage aux vues non versionnees",
+    "derives de dictionnaire variable/source",
+    "risque performance sans strategie index"
+  ]
+}

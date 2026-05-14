@@ -36,7 +36,7 @@ const SOURCE_OPTIONS: Record<string, Array<{ code: string; label: string; color:
   ],
   flow_m3s: [
     { code: 'OBS', label: 'Observé', color: '#10b981' },
-    { code: 'SIMULE', label: 'Simulé', color: '#f59e0b' },
+    { code: 'SIM', label: 'Simulé', color: '#f59e0b' },
   ],
   volume_hm3: [
     { code: 'OBS', label: 'Observé', color: '#f97316' },

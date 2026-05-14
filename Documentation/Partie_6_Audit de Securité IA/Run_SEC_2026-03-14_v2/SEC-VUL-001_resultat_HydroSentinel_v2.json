@@ -1,0 +1,96 @@
+﻿{
+  "prompt_id": "SEC-VUL-001",
+  "date_run": "2026-03-14",
+  "projet": "HydroSentinel",
+  "scope": [
+    "backend/app/api/v1/api.py",
+    "backend/app/api/v1/endpoints/admin_new.py",
+    "backend/app/api/v1/endpoints/ts_management.py",
+    "backend/app/main.py",
+    "backend/app/core/config.py",
+    "hydro-sentinel/src/pages/Login.tsx"
+  ],
+  "indices_observes": [
+    "routes admin incluses avec prefix /admin",
+    "routeurs admin declares sans dependances de securite explicites",
+    "handler global retourne debug_error",
+    "upload zip utilise extractall sans validation",
+    "fallback SECRET_KEY statique"
+  ],
+  "familles_risque": [
+    "authentification",
+    "autorisation",
+    "gestion_erreurs",
+    "validation_entree",
+    "configuration",
+    "disponibilite"
+  ],
+  "vulnerabilites": [
+    {
+      "id": "VUL-01",
+      "criticite": "critique",
+      "certitude": "constat_probable",
+      "file": "backend/app/api/v1/api.py",
+      "line": 24,
+      "description": "Routes admin exposees sans garde auth/role explicite dans les routeurs admin concernes.",
+      "impact": "Acces non autorise possible a des operations admin.",
+      "remediation": "Appliquer Depends(get_current_active_superuser) sur routeurs/endpoints admin."
+    },
+    {
+      "id": "VUL-02",
+      "criticite": "elevee",
+      "certitude": "constat_probable",
+      "file": "backend/app/main.py",
+      "line": 39,
+      "description": "Le handler global renvoie debug_error au client.",
+      "impact": "Fuite d'information interne exploitable.",
+      "remediation": "Masquer detail erreur en production, conserver uniquement dans logs internes."
+    },
+    {
+      "id": "VUL-03",
+      "criticite": "elevee",
+      "certitude": "constat_probable",
+      "file": "backend/app/api/v1/endpoints/admin_new.py",
+      "line": 944,
+      "description": "Extraction ZIP par extractall sans validation de chemin.",
+      "impact": "Risque path traversal lors upload archive malicieuse.",
+      "remediation": "Verifier chaque entree archive avant extraction."
+    },
+    {
+      "id": "VUL-04",
+      "criticite": "moyenne",
+      "certitude": "constat_probable",
+      "file": "backend/app/api/v1/endpoints/admin_new.py",
+      "line": 940,
+      "description": "Lecture complete du fichier upload en memoire.",
+      "impact": "Risque de surcharge memoire et indisponibilite partielle.",
+      "remediation": "Traiter en stream/chunks avec limite taille."
+    },
+    {
+      "id": "VUL-05",
+      "criticite": "elevee",
+      "certitude": "constat_probable",
+      "file": "backend/app/core/config.py",
+      "line": 88,
+      "description": "SECRET_KEY de fallback statique dans la configuration.",
+      "impact": "Faiblesse JWT si non surcharge environnement.",
+      "remediation": "Rendre obligatoire une SECRET_KEY forte injectee via environnement."
+    },
+    {
+      "id": "VUL-06",
+      "criticite": "moyenne",
+      "certitude": "constat_probable",
+      "file": "hydro-sentinel/src/pages/Login.tsx",
+      "line": 14,
+      "description": "Creds demo pre-remplies et logs de token/login en console.",
+      "impact": "Exposition operationnelle et hygiene securite degradee.",
+      "remediation": "Supprimer valeurs par defaut et logs sensibles hors mode dev."
+    }
+  ],
+  "synthese_cia": {
+    "confidentialite": "Risque eleve de fuite d'informations techniques et d'acces non autorise.",
+    "integrite": "Risque de modification de donnees via routes admin insuffisamment protegees.",
+    "disponibilite": "Risque modere sur endpoints upload non bornes."
+  },
+  "decision": "GO_CONDITIONNEL"
+}

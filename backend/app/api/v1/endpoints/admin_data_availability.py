@@ -58,17 +58,18 @@ async def data_availability(db: AsyncSession = Depends(get_db)) -> Dict[str, Any
         ORDER BY 1,2,3
     """))).mappings().all()
 
-    # ---- Basins availability from api.v_timeseries ----
+    # ---- Basins availability from ts.basin_measurement ----
     basin_rows = (await db.execute(text("""
         SELECT
             'level_0'::text AS basin_group,
-            t.variable_code,
-            t.source_code,
+            v.code AS variable_code,
+            src.code AS source_code,
             COUNT(*)::bigint AS record_count,
-            MIN(t.time) AS first_record,
-            MAX(t.time) AS last_record
-        FROM api.v_timeseries t
-        WHERE t.entity_type = 'basins'
+            MIN(m.time) AS first_record,
+            MAX(m.time) AS last_record
+        FROM ts.basin_measurement m
+        JOIN ref.variable v ON v.variable_id = m.variable_id
+        JOIN ref.source src ON src.source_id = m.source_id
         GROUP BY 1,2,3
         ORDER BY 1,2,3
     """))).mappings().all()
@@ -197,18 +198,20 @@ async def data_availability(db: AsyncSession = Depends(get_db)) -> Dict[str, Any
 
     basin_entity_rows = (await db.execute(text("""
         SELECT
-            t.basin_id::text AS basin_id,
+            m.basin_id::text AS basin_id,
             NULLIF(TRIM(b.basin_code), '') AS basin_code,
-            COALESCE(NULLIF(TRIM(b.basin_name), ''), t.basin_id::text) AS basin_name,
+            COALESCE(NULLIF(TRIM(b.basin_name), ''), m.basin_id::text) AS basin_name,
             b.level,
-            t.variable_code,
-            t.source_code,
+            v.code AS variable_code,
+            src.code AS source_code,
             COUNT(*)::bigint AS record_count,
-            MIN(t.time) AS first_record,
-            MAX(t.time) AS last_record
-        FROM api.v_timeseries t
-        LEFT JOIN api.v_basin b ON b.basin_id = t.basin_id
-        WHERE t.entity_type = 'basins' AND t.basin_id IS NOT NULL
+            MIN(m.time) AS first_record,
+            MAX(m.time) AS last_record
+        FROM ts.basin_measurement m
+        LEFT JOIN api.v_basin b ON b.basin_id = m.basin_id
+        JOIN ref.variable v ON v.variable_id = m.variable_id
+        JOIN ref.source src ON src.source_id = m.source_id
+        WHERE m.basin_id IS NOT NULL
         GROUP BY 1,2,3,4,5,6
         ORDER BY 3,5,6
     """))).mappings().all()

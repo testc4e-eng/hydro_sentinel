@@ -44,6 +44,13 @@ function downloadBlob(blob: Blob, filename: string) {
     URL.revokeObjectURL(url);
 }
 
+type TemplateDownloadMode =
+    | "simple"
+    | "simple_multi_source"
+    | "multi_variable"
+    | "multi_variable_multi_source"
+    | "multi_station";
+
 export default function DataManagement() {
   const [activeTab, setActiveTab] = useState("stations");
   const queryClient = useQueryClient();
@@ -83,13 +90,44 @@ export default function DataManagement() {
   );
 }
 
-// ─── EntityCrud ──────────────────────────────────────────────────────────────
+// --- EntityCrud --------------------------------------------------------------
 
 function EntityCrud({ type }: { type: string }) {
     const queryClient = useQueryClient();
+    const [providerView, setProviderView] = useState<"ABH" | "DGM">("ABH");
     const { data: entities, isLoading } = useQuery({
         queryKey: ['entities', type],
         queryFn: () => api.getEntities(type),
+    });
+    const { data: dgmBasinsLocal } = useQuery({
+        queryKey: ['dgm-basins-local'],
+        queryFn: async () => {
+            const res = await fetch(`/data/basins_dgm.geojson?v=${Date.now()}`);
+            if (!res.ok) return [];
+            const geojson = await res.json();
+            const features = Array.isArray(geojson?.features) ? geojson.features : [];
+            return features.map((feature: any, index: number) => {
+                const props = feature?.properties ?? {};
+                const rawName =
+                    props.name ??
+                    props.nom ??
+                    props.NOM ??
+                    props.Name ??
+                    props.Name1 ??
+                    props.BASSIN ??
+                    `Bassin DGM ${index + 1}`;
+                const rawCode = props.code ?? props.CODE ?? props.Code ?? props.id ?? props.ID ?? props.OBJECTID ?? null;
+                return {
+                    basin_id: `dgm-${index + 1}`,
+                    code: rawCode ? String(rawCode) : `DGM-${index + 1}`,
+                    name: String(rawName),
+                    level: props.level ?? props.niveau ?? null,
+                    provider: "DGM",
+                    _readOnly: true,
+                };
+            });
+        },
+        enabled: type === 'bassins',
     });
 
     const [searchTerm, setSearchTerm] = useState("");
@@ -98,8 +136,27 @@ function EntityCrud({ type }: { type: string }) {
     const [selectedEntity, setSelectedEntity] = useState<any>(null);
     const [deleteTarget, setDeleteTarget] = useState<any>(null);
 
+    const providerScopedEntities = useMemo(() => {
+        const baseEntities = Array.isArray(entities) ? entities : [];
+        if (type === 'stations') {
+            const withProvider = baseEntities.map((e: any) => {
+                const stationType = String(e.station_type || '').toLowerCase();
+                const provider = stationType.includes('barrage') ? 'ABH' : 'DGM';
+                return { ...e, provider };
+            });
+            return withProvider.filter((e: any) => e.provider === providerView);
+        }
+        if (type === 'bassins') {
+            if (providerView === 'DGM') {
+                return Array.isArray(dgmBasinsLocal) ? dgmBasinsLocal : [];
+            }
+            return baseEntities.map((e: any) => ({ ...e, provider: 'ABH' }));
+        }
+        return baseEntities;
+    }, [entities, type, providerView, dgmBasinsLocal]);
+
     // Filter
-    const filteredEntities = entities?.filter((e: any) => {
+    const filteredEntities = providerScopedEntities?.filter((e: any) => {
         const term = searchTerm.toLowerCase();
         const name = (e.name || e.label || "").toString().toLowerCase();
         const code = (e.code || e.alias || "").toString().toLowerCase();
@@ -161,6 +218,26 @@ function EntityCrud({ type }: { type: string }) {
                                     className="pl-8 w-[200px]"
                                 />
                             </div>
+                            {(type === 'stations' || type === 'bassins') && (
+                                <div className="flex items-center gap-1 rounded-md border p-1">
+                                    <Button
+                                        size="sm"
+                                        variant={providerView === "ABH" ? "default" : "ghost"}
+                                        onClick={() => setProviderView("ABH")}
+                                        className="h-7 px-3"
+                                    >
+                                        ABH
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant={providerView === "DGM" ? "default" : "ghost"}
+                                        onClick={() => setProviderView("DGM")}
+                                        className="h-7 px-3"
+                                    >
+                                        DGM
+                                    </Button>
+                                </div>
+                            )}
                             {type === 'stations' && (
                                 <Button size="sm" onClick={() => { setSelectedEntity(null); setDialogMode('create'); }}>
                                     <Plus className="mr-2 h-4 w-4"/> Nouveau
@@ -188,13 +265,16 @@ function EntityCrud({ type }: { type: string }) {
                                                 Type {sortConfig?.key === 'station_type' && <ArrowUpDown className="inline h-3 w-3 ml-1"/>}
                                             </TableHead>
                                         )}
+                                        {(type === 'stations' || type === 'bassins') && (
+                                            <TableHead>Source</TableHead>
+                                        )}
                                         <TableHead className="text-right">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {sortedEntities.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={4} className="text-center h-24 text-muted-foreground">
+                                            <TableCell colSpan={type === 'stations' ? 5 : 4} className="text-center h-24 text-muted-foreground">
                                                 Aucun résultat trouvé.
                                             </TableCell>
                                         </TableRow>
@@ -208,24 +288,37 @@ function EntityCrud({ type }: { type: string }) {
                                                         <Badge variant="outline">{entity.station_type || 'N/A'}</Badge>
                                                     </TableCell>
                                                 )}
+                                                {(type === 'stations' || type === 'bassins') && (
+                                                    <TableCell>
+                                                        <Badge variant={entity.provider === 'ABH' ? 'default' : 'secondary'}>
+                                                            {entity.provider || (providerView === 'ABH' ? 'ABH' : 'DGM')}
+                                                        </Badge>
+                                                    </TableCell>
+                                                )}
                                                 <TableCell className="text-right space-x-1">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        onClick={() => { setSelectedEntity(entity); setDialogMode('edit'); }}
-                                                        title="Modifier"
-                                                    >
-                                                        <Edit className="h-4 w-4" />
-                                                    </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="text-red-500 hover:text-red-600"
-                                                        onClick={() => setDeleteTarget(entity)}
-                                                        title="Supprimer"
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
+                                                    {!entity._readOnly ? (
+                                                        <>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                onClick={() => { setSelectedEntity(entity); setDialogMode('edit'); }}
+                                                                title="Modifier"
+                                                            >
+                                                                <Edit className="h-4 w-4" />
+                                                            </Button>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="text-red-500 hover:text-red-600"
+                                                                onClick={() => setDeleteTarget(entity)}
+                                                                title="Supprimer"
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        </>
+                                                    ) : (
+                                                        <span className="text-xs text-muted-foreground">Lecture seule</span>
+                                                    )}
                                                 </TableCell>
                                             </TableRow>
                                         ))
@@ -280,7 +373,7 @@ function EntityCrud({ type }: { type: string }) {
     );
 }
 
-// ─── EntityFormDialog ─────────────────────────────────────────────────────────
+// --- EntityFormDialog --------------------------------------------------------
 
 function EntityFormDialog({
     type,
@@ -450,7 +543,7 @@ function EntityFormDialog({
     );
 }
 
-// ─── ShpManager ───────────────────────────────────────────────────────────────
+// --- ShpManager --------------------------------------------------------------
 
 function ShpManager() {
     const [file, setFile] = useState<File | null>(null);
@@ -720,38 +813,91 @@ function ShpManager() {
     );
 }
 
-// ─── TimeSeriesManager ────────────────────────────────────────────────────────
+// --- TimeSeriesManager -------------------------------------------------------
 
 function TimeSeriesManager() {
     const queryClient = useQueryClient();
     const [entityType, setEntityType] = useState<"stations" | "bassins">("stations");
+    const [basinShape, setBasinShape] = useState<"ABH" | "DGM">("ABH");
     const [selectedVariable, setSelectedVariable] = useState<string>("precip_mm");
     const [selectedStation, setSelectedStation] = useState<string | null>(null);
+    const FALLBACK_VARIABLES = useMemo(() => ([
+        { code: "precip_mm", label: "Pluie", unit: "mm" },
+        { code: "flow_m3s", label: "Debit", unit: "m3/s" },
+        { code: "inflow_m3s", label: "Apport", unit: "m3/s" },
+        { code: "volume_hm3", label: "Volume", unit: "hm3" },
+    ]), []);
     
-    // Fetch Basins
-    const { data: basins } = useQuery({
-        queryKey: ['basins'],
-        queryFn: () => api.getBasins().then(res => res.data),
+    // Fetch ABH basins from API and DGM basins from local GeoJSON.
+    const { data: basinsAbh } = useQuery({
+        queryKey: ['basins', 'ABH'],
+        queryFn: () => api.getBasins({ provider: "ABH" }).then(res => res.data),
+    });
+    const { data: basinsDgmLocal } = useQuery({
+        queryKey: ['basins', 'DGM', 'local'],
+        queryFn: async () => {
+            const res = await fetch(`/data/basins_dgm.geojson?v=${Date.now()}`);
+            if (!res.ok) return [];
+            const geojson = await res.json();
+            const features = Array.isArray(geojson?.features) ? geojson.features : [];
+            return features.map((feature: any, index: number) => {
+                const props = feature?.properties ?? {};
+                const rawName =
+                    props.name ??
+                    props.nom ??
+                    props.NOM ??
+                    props.Name ??
+                    props.Name1 ??
+                    props.BASSIN ??
+                    `Bassin DGM ${index + 1}`;
+                const rawCode = props.code ?? props.CODE ?? props.Code ?? props.id ?? props.ID ?? props.OBJECTID ?? null;
+                return {
+                    basin_id: `dgm-${index + 1}`,
+                    code: rawCode ? String(rawCode) : `DGM-${index + 1}`,
+                    name: String(rawName),
+                    provider: "DGM",
+                };
+            });
+        },
     });
     const { data: variables } = useQuery({
         queryKey: ['variables'],
-        queryFn: () => api.getVariables().then(res => res.data),
+        retry: false,
+        queryFn: async () => {
+            try {
+                const res = await api.getVariables();
+                return res.data;
+            } catch {
+                return FALLBACK_VARIABLES;
+            }
+        },
     });
 
+    const selectedBasins = useMemo(() => {
+        const rawBasins = basinShape === "DGM" ? basinsDgmLocal : basinsAbh;
+        if (!Array.isArray(rawBasins)) return [];
+        return rawBasins.map((b: any, index: number) => {
+            const id = String(b?.basin_id || b?.id || `basin-${index + 1}`);
+            const name = String(b?.name || b?.nom || b?.label || b?.BASSIN || `Bassin ${index + 1}`);
+            const code = b?.code ? String(b.code) : null;
+            return {
+                ...b,
+                station_id: id,
+                station_type: "Bassin",
+                name,
+                code,
+                data_count: 0,
+            };
+        });
+    }, [basinShape, basinsAbh, basinsDgmLocal]);
+
     const { data: stationsData, isLoading: isLoadingStations } = useQuery({
-        queryKey: ['ts-stations', selectedVariable, entityType],
+        queryKey: ['ts-stations', selectedVariable, entityType, basinShape, selectedBasins.length],
         queryFn: async () => {
             if (entityType === "bassins") {
-                // Mock endpoint behavior for basins for now, return all basins
-                const res = await api.getBasins();
                 return {
                     variable_code: selectedVariable,
-                    stations: res.data.map((b: any) => ({
-                        ...b,
-                        station_id: b.basin_id || b.id, // Ensure we map ID correctly
-                        station_type: "Bassin",
-                        data_count: 0 // We don't have this info easily for basins yet without new endpoint
-                    }))
+                    stations: selectedBasins,
                 };
             }
             return api.getTimeSeriesStations(selectedVariable);
@@ -779,17 +925,12 @@ function TimeSeriesManager() {
 
     // Fetch ALL stations/basins for import dropdown
     const { data: allStationsData } = useQuery({
-        queryKey: ['ts-stations-all', selectedVariable, entityType],
+        queryKey: ['ts-stations-all', selectedVariable, entityType, basinShape, selectedBasins.length],
         queryFn: async () => {
              if (entityType === "bassins") {
-                const res = await api.getBasins();
                 return {
                     variable_code: selectedVariable,
-                    stations: res.data.map((b: any) => ({
-                        ...b,
-                        station_id: b.basin_id || b.id,
-                        station_type: "Bassin"
-                    }))
+                    stations: selectedBasins,
                 };
             }
             return api.getTimeSeriesStations(selectedVariable, true);
@@ -802,34 +943,188 @@ function TimeSeriesManager() {
     const [importFile, setImportFile] = useState<File | null>(null);
     const [replaceExisting, setReplaceExisting] = useState(false);
     const [importMode, setImportMode] = useState<string>("simple");
+    const [spatialFormat, setSpatialFormat] = useState<"shapefile" | "geojson" | "gpkg">("shapefile");
+    const [spatialFiles, setSpatialFiles] = useState<File[]>([]);
+    const [spatialCrsSource, setSpatialCrsSource] = useState<string>("EPSG:4326");
+    const [spatialCrsTarget, setSpatialCrsTarget] = useState<string>("EPSG:4326");
+    const [spatialColumnName, setSpatialColumnName] = useState<string>("");
+    const [spatialGeoType, setSpatialGeoType] = useState<"bassin_versant" | "reseau" | "station">("bassin_versant");
+    const [spatialReplaceGeometry, setSpatialReplaceGeometry] = useState(false);
     const [selectedSource, setSelectedSource] = useState<string>("OBS");
+    const [selectedTemplateSources, setSelectedTemplateSources] = useState<string[]>(["OBS"]);
     const [deleteSeriesOpen, setDeleteSeriesOpen] = useState(false);
     const [deletePointTarget, setDeletePointTarget] = useState<any>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisReport, setAnalysisReport] = useState<any>(null);
+    const [downloadingTemplate, setDownloadingTemplate] = useState<string | null>(null);
+    const PRECIP_SOURCE_CODES = ["OBS", "AROME", "ECMWF"];
+    const HYDRO_SOURCE_CODES = ["OBS", "SIM"];
+    const SOURCE_LABELS: Record<string, string> = {
+        OBS: "Observations",
+        SIM: "Simule",
+        AROME: "Prevision AROME",
+        ECMWF: "Prevision ECMWF",
+    };
 
-    const allowedSourcesForVariable = useMemo(() => {
-        const sourceList = Array.isArray(sources) ? sources : (sources?.data || []);
-        if (!sourceList.length) return [];
-        
-        const isPrecip = ['precip', 'pluie', 'snow'].some(k => (selectedVariable || '').toLowerCase().includes(k));
-        if (isPrecip) {
-            return sourceList.filter((s: any) => ['OBS', 'AROME', 'ECMWF'].includes(s.code));
-        } else if (['flow_m3s', 'inflow_m3s', 'volume_hm3', 'cote_m', 'volume_k'].includes(selectedVariable || '')) {
-            return sourceList.filter((s: any) => ['OBS', 'SIM'].includes(s.code));
+    const sourceList = useMemo(
+        () => (Array.isArray(sources) ? sources : (sources?.data || [])),
+        [sources]
+    );
+
+    const sourceByCode = useMemo(() => {
+        const map = new Map<string, any>();
+        sourceList.forEach((source: any) => {
+            const code = String(source?.code || "").toUpperCase();
+            if (code) map.set(code, source);
+        });
+        return map;
+    }, [sourceList]);
+
+    const sourceLabel = (code: string | null | undefined) => {
+        const normalizedCode = String(code || "").toUpperCase();
+        if (!normalizedCode) return "-";
+        const fromApi = sourceByCode.get(normalizedCode);
+        return fromApi?.label || SOURCE_LABELS[normalizedCode] || normalizedCode;
+    };
+
+    const isPrecipVariable = useMemo(
+        () => ['precip', 'pluie', 'snow'].some(k => (selectedVariable || '').toLowerCase().includes(k)),
+        [selectedVariable]
+    );
+
+    const isHydroVariable = useMemo(
+        () => ['flow', 'debit', 'inflow', 'apport', 'volume', 'cote', 'lacher'].some(k => (selectedVariable || '').toLowerCase().includes(k)),
+        [selectedVariable]
+    );
+
+    const variableSourceCodes = useMemo(() => {
+        if (isPrecipVariable) return PRECIP_SOURCE_CODES;
+        if (isHydroVariable) return HYDRO_SOURCE_CODES;
+        return ["OBS"];
+    }, [isPrecipVariable, isHydroVariable]);
+
+    const detectedSourceCodesFromAnalysis = useMemo(
+        () => (Array.isArray(analysisReport?.detected_sources) ? analysisReport.detected_sources.map((code: any) => String(code).toUpperCase()) : []),
+        [analysisReport]
+    );
+
+    const selectedSourceLabel = sourceLabel(selectedSource);
+    const isSpatialMode = importMode === "spatial_dgm";
+    const spatialColumns = useMemo(
+        () => (Array.isArray(analysisReport?.columns) ? analysisReport.columns as string[] : []),
+        [analysisReport]
+    );
+    const shpChecklist = useMemo(() => {
+        const names = spatialFiles.map((f) => f.name.toLowerCase());
+        return {
+            shp: names.some((n) => n.endsWith(".shp")),
+            dbf: names.some((n) => n.endsWith(".dbf")),
+            prj: names.some((n) => n.endsWith(".prj")),
+        };
+    }, [spatialFiles]);
+    const hasRequiredSpatialFiles = useMemo(() => {
+        if (spatialFormat === "shapefile") {
+            return shpChecklist.shp && shpChecklist.dbf && shpChecklist.prj;
         }
-        return [];
-    }, [sources, selectedVariable]);
+        if (spatialFormat === "geojson") {
+            return spatialFiles.some((f) => /\.(geojson|json)$/i.test(f.name));
+        }
+        return spatialFiles.some((f) => /\.gpkg$/i.test(f.name));
+    }, [spatialFiles, spatialFormat, shpChecklist.dbf, shpChecklist.prj, shpChecklist.shp]);
+
+    const isAnalysisSuccessful = analysisReport?.status === "success";
+
+    const allowedSourcesForImport = useMemo(() => {
+        return variableSourceCodes.map((code) => {
+            const src = sourceByCode.get(code);
+            return src || { code, label: SOURCE_LABELS[code] || code };
+        });
+    }, [variableSourceCodes, sourceByCode]);
+
+    const allowedSourceCodesForImport = useMemo(
+        () => allowedSourcesForImport.map((src: any) => String(src.code || "").toUpperCase()).filter(Boolean),
+        [allowedSourcesForImport]
+    );
+
+    const orderedTemplateSourceCodes = useMemo(() => {
+        if (allowedSourceCodesForImport.length === 0) return [];
+        const selectedSet = new Set(selectedTemplateSources.map((code) => String(code).toUpperCase()));
+        return allowedSourceCodesForImport.filter((code) => selectedSet.has(code));
+    }, [allowedSourceCodesForImport, selectedTemplateSources]);
+
+    const templateSourceCode = orderedTemplateSourceCodes[0] || selectedSource || allowedSourceCodesForImport[0] || "OBS";
+    const templateSourceCodes = orderedTemplateSourceCodes.length > 0 ? orderedTemplateSourceCodes : [templateSourceCode];
+    const templateSourcesSummary = templateSourceCodes
+        .map((code) => `${code} (${sourceLabel(code)})`)
+        .join(", ");
 
     useEffect(() => {
-        if (['lacher_m3s', 'lachers'].includes(selectedVariable)) {
-            setSelectedSource('ABHS_RES');
-        } else if (allowedSourcesForVariable.length > 0) {
-            if (!allowedSourcesForVariable.find((s: any) => s.code === selectedSource)) {
-                setSelectedSource(allowedSourcesForVariable[0].code);
+        if (allowedSourcesForImport.length > 0) {
+            if (!allowedSourcesForImport.find((s: any) => s.code === selectedSource)) {
+                setSelectedSource(allowedSourcesForImport[0].code);
             }
         }
-    }, [selectedVariable, allowedSourcesForVariable, selectedSource]);
+    }, [allowedSourcesForImport, selectedSource]);
+
+    useEffect(() => {
+        if (!isSpatialMode || !analysisReport) return;
+        if (analysisReport.projection_detectee && !spatialCrsSource) {
+            setSpatialCrsSource(String(analysisReport.projection_detectee));
+        } else if (analysisReport.projection_detectee) {
+            setSpatialCrsSource(String(analysisReport.projection_detectee));
+        }
+        if (!spatialColumnName && Array.isArray(analysisReport.columns) && analysisReport.columns.length > 0) {
+            const preferred = analysisReport.colonne_nom_utilisee || analysisReport.columns[0];
+            setSpatialColumnName(String(preferred));
+        }
+    }, [analysisReport, isSpatialMode, spatialColumnName, spatialCrsSource]);
+
+    useEffect(() => {
+        if (entityType === "bassins") {
+            setSelectedStation(null);
+        }
+    }, [basinShape, entityType]);
+
+    useEffect(() => {
+        if (allowedSourceCodesForImport.length === 0) {
+            setSelectedTemplateSources([]);
+            return;
+        }
+        setSelectedTemplateSources((prev) => {
+            const normalizedPrev = prev.map((code) => String(code).toUpperCase());
+            const filtered = normalizedPrev.filter((code) => allowedSourceCodesForImport.includes(code));
+            if (filtered.length > 0) {
+                return Array.from(new Set(filtered));
+            }
+            const fallback = allowedSourceCodesForImport.includes(selectedSource)
+                ? selectedSource
+                : allowedSourceCodesForImport[0];
+            return fallback ? [fallback] : [];
+        });
+    }, [allowedSourceCodesForImport, selectedSource]);
+
+    const toggleTemplateSource = useCallback(
+        (sourceCode: string, checked: boolean) => {
+            const normalized = String(sourceCode || "").toUpperCase();
+            if (!normalized) return;
+            setSelectedTemplateSources((prev) => {
+                const current = prev
+                    .map((code) => String(code).toUpperCase())
+                    .filter((code) => allowedSourceCodesForImport.includes(code));
+                if (checked) {
+                    if (current.includes(normalized)) {
+                        return current;
+                    }
+                    return [...current, normalized];
+                }
+                if (current.length <= 1 && current.includes(normalized)) {
+                    return current;
+                }
+                return current.filter((code) => code !== normalized);
+            });
+        },
+        [allowedSourceCodesForImport]
+    );
 
     // Delete single point mutation
     const deletePointMutation = useMutation({
@@ -862,31 +1157,115 @@ function TimeSeriesManager() {
         }
     });
 
-    const handleAnalyze = async () => {
-        if (!importFile) return;
+    const analyzeFile = async (fileToAnalyze: File, notify: boolean = true): Promise<any | null> => {
         setIsAnalyzing(true);
         setAnalysisReport(null);
         
         const formData = new FormData();
-        formData.append('file', importFile);
+        formData.append('file', fileToAnalyze);
         formData.append('entity_type', entityType);
+        formData.append('import_mode', importMode);
+        if (selectedStation) formData.append('station_id', selectedStation);
+        if (selectedVariable) formData.append('variable_code', selectedVariable);
         
         try {
             const res = await api.analyzeTimeSeries(formData);
             setAnalysisReport(res.data);
-            if (res.data.status === 'success') {
-                toast.success(`Analyse terminée: ${res.data.stations_found} stations trouvées`);
-            } else {
+            if (notify && res.data.status === 'success') {
+                const entityLabel = entityType === 'bassins' ? 'bassins' : 'stations';
+                toast.success(`Analyse terminee: ${res.data.stations_found} ${entityLabel} trouves`);
+            } else if (notify) {
                 toast.error("Erreur d'analyse: " + res.data.message);
             }
+            return res.data;
         } catch (error: any) {
-             toast.error("Erreur lors de l'analyse: " + (error.response?.data?.detail || error.message));
+            if (notify) {
+                toast.error("Erreur lors de l'analyse: " + (error.response?.data?.detail || error.message));
+            }
+            return null;
         } finally {
             setIsAnalyzing(false);
         }
     };
 
+    const analyzeSpatialFiles = async (notify: boolean = true): Promise<any | null> => {
+        if (!hasRequiredSpatialFiles) {
+            if (notify) toast.error("Fichiers geospatiaux incomplets pour l'analyse.");
+            return null;
+        }
+        setIsAnalyzing(true);
+        setAnalysisReport(null);
+        const formData = new FormData();
+        formData.append("format", spatialFormat);
+        formData.append("crs_source", spatialCrsSource || "EPSG:4326");
+        formData.append("crs_cible", spatialCrsTarget || "EPSG:4326");
+        formData.append("colonne_nom", spatialColumnName || "");
+        formData.append("type_geo", spatialGeoType);
+        formData.append("remplacer", String(spatialReplaceGeometry));
+        formData.append("analyze_only", "true");
+        spatialFiles.forEach((file) => formData.append("fichiers", file));
+        try {
+            const res = await api.uploadSpatialImport(formData);
+            setAnalysisReport(res.data);
+            if (notify) {
+                toast.success("Analyse spatiale terminee.");
+            }
+            return res.data;
+        } catch (error: any) {
+            if (notify) {
+                toast.error("Erreur analyse spatiale: " + (error.response?.data?.detail || error.message));
+            }
+            return null;
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
+    const handleAnalyze = async () => {
+        if (isSpatialMode) {
+            await analyzeSpatialFiles(true);
+            return;
+        }
+        if (!importFile) return;
+        await analyzeFile(importFile, true);
+    };
+
     const handleImport = async () => {
+        if (isSpatialMode) {
+            if (!hasRequiredSpatialFiles) {
+                toast.error("Veuillez fournir les fichiers geospatiaux requis.");
+                return;
+            }
+            if (!isAnalysisSuccessful) {
+                const analysisResult = await analyzeSpatialFiles(false);
+                if (!analysisResult || analysisResult.status !== "success") {
+                    toast.error("Analyse spatiale requise avant import.");
+                    return;
+                }
+            }
+            const formData = new FormData();
+            formData.append("format", spatialFormat);
+            formData.append("crs_source", spatialCrsSource || "EPSG:4326");
+            formData.append("crs_cible", spatialCrsTarget || "EPSG:4326");
+            formData.append("colonne_nom", spatialColumnName || "");
+            formData.append("type_geo", spatialGeoType);
+            formData.append("remplacer", String(spatialReplaceGeometry));
+            formData.append("analyze_only", "false");
+            spatialFiles.forEach((file) => formData.append("fichiers", file));
+            try {
+                const res = await api.uploadSpatialImport(formData);
+                toast.success(
+                    `Import spatial termine: ${res?.data?.importes ?? 0} importes, ${res?.data?.non_matches?.length ?? 0} non matches.`,
+                );
+                setImportOpen(false);
+                setSpatialFiles([]);
+                setAnalysisReport(null);
+            } catch (error: any) {
+                toast.error("Erreur import spatial: " + (error.response?.data?.detail || error.message));
+            }
+            return;
+        }
+
         if (!importFile) return;
         if (importMode === 'simple' && (!selectedStation || !selectedVariable)) {
             toast.error("Station et Variable requises pour le mode simple");
@@ -900,19 +1279,31 @@ function TimeSeriesManager() {
             toast.error("Variable requise pour le mode multi-stations");
             return;
         }
+
+        if (!isAnalysisSuccessful) {
+            const analysisResult = await analyzeFile(importFile, false);
+            if (!analysisResult || analysisResult.status !== 'success') {
+                toast.error("Analyse requise avant import. Cliquez sur Analyser et corrigez les erreurs.");
+                return;
+            }
+        }
         
-        const formData = new FormData();
-        if (selectedStation) formData.append('station_id', selectedStation);
-        if (selectedVariable) formData.append('variable_code', selectedVariable);
-        formData.append('file', importFile);
-        formData.append('import_mode', importMode);
-        formData.append('replace_existing', String(replaceExisting));
-        formData.append('source_code', selectedSource);
-        formData.append('entity_type', entityType);
+        const buildFormData = (sourceCode: string) => {
+            const formData = new FormData();
+            if (selectedStation) formData.append('station_id', selectedStation);
+            if (selectedVariable) formData.append('variable_code', selectedVariable);
+            formData.append('file', importFile);
+            formData.append('import_mode', importMode);
+            formData.append('replace_existing', String(replaceExisting));
+            formData.append('source_code', sourceCode);
+            formData.append('entity_type', entityType);
+            return formData;
+        };
 
         try {
-            await api.uploadTimeSeries(formData);
-            toast.success("Import réussi !");
+            const res = await api.uploadTimeSeries(buildFormData(selectedSource));
+            toast.success(res?.data?.message || "Import reussi !");
+
             setImportOpen(false);
             setImportFile(null);
             queryClient.invalidateQueries({ queryKey: ['ts-data', selectedVariable, selectedStation] });
@@ -923,42 +1314,87 @@ function TimeSeriesManager() {
     };
 
     // Smart template download handlers
-    const handleDownloadTemplate = async (mode: string) => {
+    const handleDownloadTemplate = async (mode: TemplateDownloadMode) => {
+        if (downloadingTemplate) return;
+        setDownloadingTemplate(mode);
         try {
             let res: any;
             let filename: string;
-            
-            if (mode === 'simple') {
+            const sourceCodeForTemplate = templateSourceCode || "OBS";
+            const sourceCodesForTemplate = templateSourceCodes.length > 0 ? templateSourceCodes : [sourceCodeForTemplate];
+
+            if (mode === "simple") {
                 if (!selectedStation || !selectedVariable) {
-                    toast.warning("Sélectionnez une station et une variable pour générer un template pré-rempli");
+                    toast.warning("Selectionnez une station et une variable pour generer un template pre-rempli");
                 }
-                res = await api.downloadTemplateSimple(selectedStation || undefined, selectedVariable || undefined);
-                filename = `template_simple_${selectedStation || 'station'}_${selectedVariable || 'variable'}.xlsx`;
-            } else if (mode === 'multi_variable') {
+                res = await api.downloadTemplateSimple(
+                    selectedStation || undefined,
+                    selectedVariable || undefined,
+                    sourceCodeForTemplate
+                );
+                filename = `template_simple_${selectedStation || "station"}_${selectedVariable || "variable"}_${sourceCodeForTemplate.toLowerCase()}.xlsx`;
+            } else if (mode === "simple_multi_source") {
+                if (!selectedStation || !selectedVariable) {
+                    toast.warning("Selectionnez une station et une variable pour generer un template pre-rempli");
+                }
+                res = await api.downloadTemplateSimpleMultiSource(
+                    selectedStation || undefined,
+                    selectedVariable || undefined,
+                    sourceCodesForTemplate
+                );
+                filename = `template_simple_multi_source_${selectedStation || "station"}_${selectedVariable || "variable"}_${sourceCodesForTemplate.map((s) => s.toLowerCase()).join("-")}.xlsx`;
+            } else if (mode === "multi_variable") {
                 if (!selectedStation) {
-                    toast.warning("Sélectionnez une station pour générer un template pré-rempli");
+                    toast.warning("Selectionnez une station pour generer un template pre-rempli");
                 }
-                res = await api.downloadTemplateMultiVariable(selectedStation || undefined);
-                filename = `template_multi_variable.xlsx`;
+                res = await api.downloadTemplateMultiVariable(selectedStation || undefined, sourceCodeForTemplate);
+                filename = `template_multi_variable_${sourceCodeForTemplate.toLowerCase()}.xlsx`;
+            } else if (mode === "multi_variable_multi_source") {
+                if (!selectedStation) {
+                    toast.warning("Selectionnez une station pour generer un template pre-rempli");
+                }
+                res = await api.downloadTemplateMultiVariableMultiSource(
+                    selectedStation || undefined,
+                    sourceCodesForTemplate
+                );
+                filename = `template_multi_variable_multi_source_${sourceCodesForTemplate.map((s) => s.toLowerCase()).join("-")}.xlsx`;
             } else {
                 if (!selectedVariable) {
-                    toast.warning("Sélectionnez une variable pour générer un template pré-rempli");
+                    toast.warning("Selectionnez une variable pour generer un template pre-rempli");
                 }
-                res = await api.downloadTemplateMultiStation(selectedVariable || undefined);
-                filename = `template_multi_station_${selectedVariable || 'variable'}.xlsx`;
+                if (entityType === "bassins") {
+                    res = await api.downloadTemplateMultiBasin(
+                        selectedVariable || undefined,
+                        sourceCodeForTemplate,
+                        basinShape
+                    );
+                    filename = `template_multi_bassins_${basinShape.toLowerCase()}_${selectedVariable || "variable"}_${sourceCodeForTemplate.toLowerCase()}.xlsx`;
+                } else {
+                    res = await api.downloadTemplateMultiStation(selectedVariable || undefined, sourceCodeForTemplate);
+                    filename = `template_multi_station_${selectedVariable || "variable"}_${sourceCodeForTemplate.toLowerCase()}.xlsx`;
+                }
             }
-            
-            // Extract filename from Content-Disposition header if available
-            const contentDisposition = res.headers?.['content-disposition'];
+
+            const contentDisposition = res.headers?.["content-disposition"];
             if (contentDisposition) {
-                const match = contentDisposition.match(/filename=([^;]+)/);
-                if (match) filename = match[1].trim();
+                const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+                const plainMatch = contentDisposition.match(/filename=\"?([^\";]+)\"?/i);
+                const serverFilename = utf8Match?.[1] ? decodeURIComponent(utf8Match[1]) : plainMatch?.[1];
+                if (serverFilename) {
+                    filename = serverFilename.trim();
+                }
             }
-            
+
             downloadBlob(res.data, filename);
-            toast.success("Template téléchargé !");
+            toast.success(`Template telecharge (sources: ${sourceCodesForTemplate.join(", ")})`);
         } catch (err: any) {
-            toast.error("Erreur lors du téléchargement: " + (err.response?.data?.detail || err.message));
+            if (err?.code === "ECONNABORTED") {
+                toast.error("Le telechargement a expire. Verifiez le backend et reessayez.");
+            } else {
+                toast.error("Erreur lors du telechargement: " + (err.response?.data?.detail || err.message));
+            }
+        } finally {
+            setDownloadingTemplate(null);
         }
     };
 
@@ -977,13 +1413,7 @@ function TimeSeriesManager() {
         timestamp: d.timestamp
     })).reverse() || [];
 
-    const filteredVariables = variables?.filter((v: any) => {
-        if (entityType === "bassins") {
-            const code = v?.code || '';
-            return ['precip_mm', 'pluie', 'precip'].some(k => code.toLowerCase().includes(k));
-        }
-        return true;
-    });
+    const filteredVariables = variables;
 
     const selectedStationInfo = stationsData?.stations?.find((s: any) => s.station_id === selectedStation);
 
@@ -1012,11 +1442,6 @@ function TimeSeriesManager() {
                             onClick={() => {
                                 setEntityType("bassins");
                                 setSelectedStation(null);
-                                // Force selectedVariable to precip_mm if switching to bassins,
-                                // since only precip is allowed for bassins currently.
-                                if (!['precip_mm', 'pluie'].includes(selectedVariable)) {
-                                    setSelectedVariable('precip_mm');
-                                }
                             }}
                         >
                             Bassins
@@ -1042,6 +1467,29 @@ function TimeSeriesManager() {
                         </div>
 
                         <div className="space-y-2">
+                            {entityType === "bassins" && (
+                                <div className="mb-2">
+                                    <Label className="mb-2 block">Shape bassin</Label>
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant={basinShape === "ABH" ? "default" : "outline"}
+                                            onClick={() => setBasinShape("ABH")}
+                                        >
+                                            ABH
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant={basinShape === "DGM" ? "default" : "outline"}
+                                            onClick={() => setBasinShape("DGM")}
+                                        >
+                                            DGM
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
                             <Label htmlFor="station">{entityType === "stations" ? "Station" : "Bassin"}</Label>
                             <select 
                                 id="station"
@@ -1064,50 +1512,123 @@ function TimeSeriesManager() {
                     <div className="flex flex-col space-y-3 pt-4 border-t">
                         <div className="flex justify-between items-center flex-wrap gap-2">
                             <Label className="text-sm font-medium">Import de Données</Label>
-                            <div className="flex gap-2 flex-wrap">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <div className="flex items-center gap-2 flex-wrap rounded-md border border-input px-2 py-1">
+                                    <Label className="text-xs text-muted-foreground">Sources canevas</Label>
+                                    {allowedSourcesForImport.map((src: any) => {
+                                        const sourceCode = String(src.code || "").toUpperCase();
+                                        const checked = templateSourceCodes.includes(sourceCode);
+                                        return (
+                                            <label
+                                                key={`template-source-${sourceCode}`}
+                                                className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs ${checked ? "bg-primary/10 text-primary" : "bg-muted/30 text-muted-foreground"}`}
+                                            >
+                                                <Checkbox
+                                                    checked={checked}
+                                                    onCheckedChange={(value) => toggleTemplateSource(sourceCode, value === true)}
+                                                    className="h-3.5 w-3.5"
+                                                />
+                                                <span>{sourceCode}</span>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
                                 <Button
                                     variant="outline"
                                     size="sm"
                                     className="h-8 gap-1"
-                                    onClick={() => handleDownloadTemplate('simple')}
-                                    title={selectedStation && selectedVariable ? `Template pré-rempli pour ${selectedVariable}` : "Sélectionnez station + variable pour pré-remplir"}
+                                    disabled={downloadingTemplate !== null}
+                                    onClick={() => handleDownloadTemplate("simple")}
+                                    title={selectedStation && selectedVariable ? `Template pre-rempli pour ${selectedVariable}` : "Selectionnez station + variable pour pre-remplir"}
                                 >
-                                    <Download className="h-3 w-3" /> Modèle Simple
+                                    {downloadingTemplate === "simple" ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                        <Download className="h-3 w-3" />
+                                    )} Modele Simple
                                     {selectedStation && selectedVariable && <Check className="h-3 w-3 text-green-500 ml-1" />}
                                 </Button>
                                 <Button
                                     variant="outline"
                                     size="sm"
                                     className="h-8 gap-1"
-                                    onClick={() => handleDownloadTemplate('multi_variable')}
-                                    title={selectedStation ? `Template multi-var pour la station sélectionnée` : "Sélectionnez une station pour pré-remplir"}
+                                    disabled={downloadingTemplate !== null}
+                                    onClick={() => handleDownloadTemplate("simple_multi_source")}
+                                    title={selectedStation && selectedVariable ? `Template multi-source pre-rempli pour ${selectedVariable}` : "Selectionnez station + variable pour pre-remplir"}
                                 >
-                                    <Download className="h-3 w-3" /> Modèle Multi-Var
+                                    {downloadingTemplate === "simple_multi_source" ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                        <Download className="h-3 w-3" />
+                                    )} Modele Multi-Source
+                                    {selectedStation && selectedVariable && templateSourceCodes.length > 1 && <Check className="h-3 w-3 text-green-500 ml-1" />}
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 gap-1"
+                                    disabled={downloadingTemplate !== null}
+                                    onClick={() => handleDownloadTemplate("multi_variable")}
+                                    title={selectedStation ? "Template multi-var pour la station selectionnee" : "Selectionnez une station pour pre-remplir"}
+                                >
+                                    {downloadingTemplate === "multi_variable" ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                        <Download className="h-3 w-3" />
+                                    )} Modele Multi-Var
                                     {selectedStation && <Check className="h-3 w-3 text-green-500 ml-1" />}
                                 </Button>
                                 <Button
                                     variant="outline"
                                     size="sm"
                                     className="h-8 gap-1"
-                                    onClick={() => handleDownloadTemplate('multi_station')}
-                                    title={selectedVariable ? `Template multi-stations pour ${selectedVariable}` : "Sélectionnez une variable pour pré-remplir"}
+                                    disabled={downloadingTemplate !== null}
+                                    onClick={() => handleDownloadTemplate("multi_variable_multi_source")}
+                                    title={selectedStation ? "Template multi-var + multi-source pour la station selectionnee" : "Selectionnez une station pour pre-remplir"}
                                 >
-                                    <Download className="h-3 w-3" /> Modèle Multi-Stations
+                                    {downloadingTemplate === "multi_variable_multi_source" ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                        <Download className="h-3 w-3" />
+                                    )} Modele Multi-Var, Multi-Source
+                                    {selectedStation && templateSourceCodes.length > 1 && <Check className="h-3 w-3 text-green-500 ml-1" />}
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 gap-1"
+                                    disabled={downloadingTemplate !== null}
+                                    onClick={() => handleDownloadTemplate("multi_station")}
+                                    title={selectedVariable ? `Template multi-${entityType === "bassins" ? "bassins" : "stations"} pour ${selectedVariable}` : "Selectionnez une variable pour pre-remplir"}
+                                >
+                                    {downloadingTemplate === "multi_station" ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                    ) : (
+                                        <Download className="h-3 w-3" />
+                                    )} {entityType === "bassins" ? "Modele Multi-Bassins" : "Modele Multi-Stations"}
                                     {selectedVariable && <Check className="h-3 w-3 text-green-500 ml-1" />}
                                 </Button>
                                 <Button size="sm" onClick={() => setImportOpen(true)} className="h-8 gap-1">
-                                    <Upload className="h-3 w-3" /> Importer Données
+                                    <Upload className="h-3 w-3" /> Importer Donnees
                                 </Button>
                             </div>
                         </div>
                         
                         {/* Context hint */}
-                        {(selectedStation || selectedVariable) && (
+                        {(selectedStation || selectedVariable || templateSourceCodes.length > 0) && (
                             <div className="text-xs text-muted-foreground bg-muted/30 rounded px-3 py-2 flex items-center gap-2">
                                 <Check className="h-3 w-3 text-green-500 flex-shrink-0" />
                                 Les templates seront pré-remplis avec :
                                 {selectedVariable && <Badge variant="secondary" className="text-xs">{selectedVariable}</Badge>}
                                 {selectedStationInfo && <Badge variant="secondary" className="text-xs">{selectedStationInfo.name}</Badge>}
+                                <Badge variant="secondary" className="text-xs">
+                                    Sources canevas: {templateSourcesSummary}
+                                </Badge>
+                                {entityType === "bassins" && (
+                                    <Badge variant="secondary" className="text-xs">
+                                        Shape: {basinShape}
+                                    </Badge>
+                                )}
                             </div>
                         )}
                     </div>
@@ -1146,9 +1667,9 @@ function TimeSeriesManager() {
                                 <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>
                             ) : chartData.length > 0 ? (
                                 <ResponsiveContainer width="100%" height={300}>
-                                    <LineChart data={chartData}>
+                                    <LineChart data={chartData} margin={{ top: 10, right: 32, left: 16, bottom: 24 }}>
                                         <CartesianGrid strokeDasharray="3 3" />
-                                        <XAxis dataKey="date" angle={-45} textAnchor="end" height={80} />
+                                        <XAxis dataKey="date" angle={-45} textAnchor="end" height={80} padding={{ left: 12, right: 28 }} />
                                         <YAxis />
                                         <Tooltip />
                                         <Legend />
@@ -1247,12 +1768,28 @@ function TimeSeriesManager() {
                 <DialogContent className="max-w-lg">
                     <DialogHeader>
                         <DialogTitle>Importer des données</DialogTitle>
-                        <DialogDescription>Formats supportés: CSV, Excel (.xlsx)</DialogDescription>
+                        <DialogDescription>
+                            {isSpatialMode
+                                ? "Import spatial DGM: Shapefile, GeoJSON, GeoPackage."
+                                : "Formats supportés: CSV, Excel (.xlsx)"}
+                        </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4 overflow-y-auto max-h-[70vh] pr-1">
                         <div className="space-y-2">
                             <Label>Mode d'import</Label>
-                            <RadioGroup value={importMode} onValueChange={setImportMode} className="flex flex-col space-y-1">
+                            <RadioGroup
+                                value={importMode}
+                                onValueChange={(value) => {
+                                    setImportMode(value);
+                                    setAnalysisReport(null);
+                                    if (value === "spatial_dgm") {
+                                        setImportFile(null);
+                                    } else if (importFile) {
+                                        void analyzeFile(importFile, false);
+                                    }
+                                }}
+                                className="flex flex-col space-y-1"
+                            >
                                 <div className="flex items-center space-x-2">
                                     <RadioGroupItem value="simple" id="mode-simple" />
                                     <Label htmlFor="mode-simple">Simple (Une Station, Une Variable)</Label>
@@ -1263,120 +1800,453 @@ function TimeSeriesManager() {
                                 </div>
                                 <div className="flex items-center space-x-2">
                                     <RadioGroupItem value="multi_station" id="mode-multistation" />
-                                    <Label htmlFor="mode-multistation">Multi-Stations (Une Variable, Colonnes=Stations)</Label>
+                                    <Label htmlFor="mode-multistation">
+                                        {entityType === "bassins"
+                                            ? "Multi-Bassins (Une Variable, Colonnes=Bassins)"
+                                            : "Multi-Stations (Une Variable, Colonnes=Stations)"}
+                                    </Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <RadioGroupItem value="spatial_dgm" id="mode-spatial-dgm" />
+                                    <Label htmlFor="mode-spatial-dgm">Spatial - Délimitation Bassins DGM (Shape / GeoJSON)</Label>
                                 </div>
                             </RadioGroup>
                         </div>
 
-                        <div className="space-y-2">
-                            <Label htmlFor="import-file">Fichier</Label>
-                            <Input 
-                                id="import-file" 
-                                type="file" 
-                                accept=".csv,.xlsx,.xls"
-                                onChange={(e) => {
-                                    setImportFile(e.target.files?.[0] || null);
-                                    setAnalysisReport(null);
-                                }} 
-                            />
-                        </div>
+                        {isSpatialMode ? (
+                            <>
+                                <section className="space-y-2">
+                                    <Label>Format géospatial</Label>
+                                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                                        <Button
+                                            type="button"
+                                            variant={spatialFormat === "shapefile" ? "default" : "outline"}
+                                            className="h-auto justify-start whitespace-normal text-left text-xs"
+                                            onClick={() => {
+                                                setSpatialFormat("shapefile");
+                                                setSpatialFiles([]);
+                                                setAnalysisReport(null);
+                                            }}
+                                        >
+                                            Shapefile (.shp + .dbf + .prj)
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant={spatialFormat === "geojson" ? "default" : "outline"}
+                                            className="h-auto justify-start whitespace-normal text-left text-xs"
+                                            onClick={() => {
+                                                setSpatialFormat("geojson");
+                                                setSpatialFiles([]);
+                                                setAnalysisReport(null);
+                                            }}
+                                        >
+                                            GeoJSON (.geojson / .json)
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant={spatialFormat === "gpkg" ? "default" : "outline"}
+                                            className="h-auto justify-start whitespace-normal text-left text-xs"
+                                            onClick={() => {
+                                                setSpatialFormat("gpkg");
+                                                setSpatialFiles([]);
+                                                setAnalysisReport(null);
+                                            }}
+                                        >
+                                            GeoPackage (.gpkg)
+                                        </Button>
+                                    </div>
+                                </section>
 
-                        {allowedSourcesForVariable.length > 0 && (
-                            <div className="space-y-2">
-                                <Label>Source de données</Label>
-                                <select 
-                                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
-                                    value={selectedSource || allowedSourcesForVariable[0]?.code}
-                                    onChange={(e) => setSelectedSource(e.target.value)}
-                                >
-                                    {allowedSourcesForVariable.map((src: any) => (
-                                        <option key={src.code} value={src.code}>{src.label}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        )}
-                        
-                        {importMode !== 'multi_station' && (
-                            <div className="space-y-2">
-                                <Label>Cible ({entityType === "stations" ? "Station" : "Bassin"})</Label>
-                                <select 
-                                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
-                                    value={selectedStation || ""}
-                                    onChange={(e) => setSelectedStation(e.target.value || null)}
-                                >
-                                    <option value="">Sélectionner {entityType === "stations" ? "une station" : "un bassin"}</option>
-                                    {allStationsData?.stations
-                                        ?.filter((s: any) => {
-                                            const isBarrageSpecific = ['lacher_m3s', 'volume_k', 'cote_m', 'lachers', 'volume'].includes(selectedVariable || '');
-                                            return isBarrageSpecific ? s?.station_type === 'Barrage' : true;
-                                        })
-                                        ?.map((s: any) => (
-                                        <option key={s?.station_id || Math.random().toString()} value={s?.station_id}>{s?.name || 'Inconnu'}</option>
-                                    ))}
-                                </select> 
-                            </div>
-                        )}
-                        
-                        {importMode !== 'multi_variable' && (
-                            <div className="space-y-2">
-                                <Label>Variable concernée</Label>
-                                <select 
-                                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
-                                    value={selectedVariable}
-                                    onChange={(e) => setSelectedVariable(e.target.value)}
-                                >
-                                    {filteredVariables?.map((v: any) => (
-                                        <option key={v.code} value={v.code}>{v.label} ({v.unit})</option>
-                                    ))}
-                                </select>
-                            </div>
-                        )}
+                                {spatialFormat === "shapefile" && (
+                                    <section className="space-y-2">
+                                        <Label htmlFor="import-spatial-shp">Fichiers Shapefile (obligatoires: .shp .dbf .prj)</Label>
+                                        <Input
+                                            id="import-spatial-shp"
+                                            type="file"
+                                            multiple
+                                            accept=".shp,.dbf,.prj,.shx,.cpg"
+                                            onChange={(e) => {
+                                                const files = Array.from(e.target.files || []);
+                                                setSpatialFiles(files);
+                                                setAnalysisReport(null);
+                                            }}
+                                        />
+                                        <div className="grid grid-cols-1 gap-1 text-xs sm:grid-cols-3">
+                                            <span className={shpChecklist.shp ? "text-green-600" : "text-red-600"}>.shp {shpChecklist.shp ? "✓" : "manquant"}</span>
+                                            <span className={shpChecklist.dbf ? "text-green-600" : "text-red-600"}>.dbf {shpChecklist.dbf ? "✓" : "manquant"}</span>
+                                            <span className={shpChecklist.prj ? "text-green-600" : "text-red-600"}>.prj {shpChecklist.prj ? "✓" : "manquant"}</span>
+                                        </div>
+                                    </section>
+                                )}
 
-                        <div className="flex items-center space-x-2">
-                            <Checkbox 
-                                id="replace" 
-                                checked={replaceExisting} 
-                                onCheckedChange={(c) => setReplaceExisting(!!c)} 
-                            />
-                            <Label htmlFor="replace">Remplacer les données existantes pour cette période</Label>
-                        </div>
+                                {spatialFormat === "geojson" && (
+                                    <section className="space-y-2">
+                                        <Label htmlFor="import-spatial-geojson">Fichier GeoJSON</Label>
+                                        <Input
+                                            id="import-spatial-geojson"
+                                            type="file"
+                                            accept=".geojson,.json"
+                                            onChange={(e) => {
+                                                const files = Array.from(e.target.files || []);
+                                                setSpatialFiles(files);
+                                                setAnalysisReport(null);
+                                            }}
+                                        />
+                                    </section>
+                                )}
+
+                                {spatialFormat === "gpkg" && (
+                                    <section className="space-y-2">
+                                        <Label htmlFor="import-spatial-gpkg">Fichier GeoPackage</Label>
+                                        <Input
+                                            id="import-spatial-gpkg"
+                                            type="file"
+                                            accept=".gpkg"
+                                            onChange={(e) => {
+                                                const files = Array.from(e.target.files || []);
+                                                setSpatialFiles(files);
+                                                setAnalysisReport(null);
+                                            }}
+                                        />
+                                    </section>
+                                )}
+
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                    <div className="space-y-2">
+                                        <Label>Système de projection (CRS source)</Label>
+                                        <select
+                                            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                                            value={spatialCrsSource}
+                                            onChange={(e) => setSpatialCrsSource(e.target.value)}
+                                        >
+                                            <option value="EPSG:4326">WGS84 - EPSG:4326</option>
+                                            <option value="EPSG:26191">Maroc - Lambert Nord EPSG:26191</option>
+                                            <option value="EPSG:26192">Maroc - Lambert Sud EPSG:26192</option>
+                                            <option value="EPSG:32629">UTM Zone 29N - EPSG:32629</option>
+                                            <option value="EPSG:32630">UTM Zone 30N - EPSG:32630</option>
+                                        </select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>CRS cible</Label>
+                                        <select
+                                            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                                            value={spatialCrsTarget}
+                                            onChange={(e) => setSpatialCrsTarget(e.target.value)}
+                                        >
+                                            <option value="EPSG:4326">WGS84 - EPSG:4326</option>
+                                            <option value="EPSG:26191">Maroc - Lambert Nord EPSG:26191</option>
+                                            <option value="EPSG:26192">Maroc - Lambert Sud EPSG:26192</option>
+                                            <option value="EPSG:32629">UTM Zone 29N - EPSG:32629</option>
+                                            <option value="EPSG:32630">UTM Zone 30N - EPSG:32630</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label>Colonne nom du bassin</Label>
+                                    <select
+                                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                                        value={spatialColumnName}
+                                        onChange={(e) => setSpatialColumnName(e.target.value)}
+                                    >
+                                        <option value="">Sélectionner une colonne</option>
+                                        {spatialColumns.map((columnName) => (
+                                            <option key={columnName} value={columnName}>{columnName}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label>Type géographique</Label>
+                                    <select
+                                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                                        value={spatialGeoType}
+                                        onChange={(e) => setSpatialGeoType(e.target.value as "bassin_versant" | "reseau" | "station")}
+                                    >
+                                        <option value="bassin_versant">Délimitation bassin versant (polygone)</option>
+                                        <option value="reseau">Réseau hydrographique (ligne)</option>
+                                        <option value="station">Points stations (point)</option>
+                                    </select>
+                                </div>
+
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id="spatial-replace"
+                                        checked={spatialReplaceGeometry}
+                                        onCheckedChange={(c) => setSpatialReplaceGeometry(!!c)}
+                                    />
+                                    <Label htmlFor="spatial-replace">Remplacer la géométrie existante pour ce bassin</Label>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="space-y-2">
+                                    <Label htmlFor="import-file">Fichier</Label>
+                                    <Input
+                                        id="import-file"
+                                        type="file"
+                                        accept=".csv,.xlsx,.xls"
+                                        onChange={(e) => {
+                                            const nextFile = e.target.files?.[0] || null;
+                                            setImportFile(nextFile);
+                                            setAnalysisReport(null);
+                                            if (nextFile) {
+                                                void analyzeFile(nextFile, false);
+                                            }
+                                        }}
+                                    />
+                                </div>
+
+                                {allowedSourcesForImport.length > 0 && (
+                                    <div className="space-y-2">
+                                        <Label>Source de données</Label>
+                                        <select
+                                            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                                            value={selectedSource || allowedSourcesForImport[0]?.code}
+                                            onChange={(e) => setSelectedSource(e.target.value)}
+                                        >
+                                            {allowedSourcesForImport.map((src: any) => (
+                                                <option key={src.code} value={src.code}>
+                                                    {src.code} - {sourceLabel(src.code)}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+
+                                {importMode !== 'multi_station' && (
+                                    <div className="space-y-2">
+                                        <Label>Cible ({entityType === "stations" ? "Station" : "Bassin"})</Label>
+                                        <select
+                                            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                                            value={selectedStation || ""}
+                                            onChange={(e) => {
+                                                setSelectedStation(e.target.value || null);
+                                                setAnalysisReport(null);
+                                                if (importFile) {
+                                                    void analyzeFile(importFile, false);
+                                                }
+                                            }}
+                                        >
+                                            <option value="">Sélectionner {entityType === "stations" ? "une station" : "un bassin"}</option>
+                                            {allStationsData?.stations
+                                                ?.filter((s: any) => {
+                                                    const isBarrageSpecific = ['lacher_m3s', 'volume_k', 'cote_m', 'lachers', 'volume'].includes(selectedVariable || '');
+                                                    return isBarrageSpecific ? s?.station_type === 'Barrage' : true;
+                                                })
+                                                ?.map((s: any) => (
+                                                    <option key={s?.station_id || Math.random().toString()} value={s?.station_id}>{s?.name || 'Inconnu'}</option>
+                                                ))}
+                                        </select>
+                                    </div>
+                                )}
+
+                                {importMode !== 'multi_variable' && (
+                                    <div className="space-y-2">
+                                        <Label>Variable concernée</Label>
+                                        <select
+                                            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                                            value={selectedVariable}
+                                            onChange={(e) => {
+                                                setSelectedVariable(e.target.value);
+                                                setAnalysisReport(null);
+                                                if (importFile) {
+                                                    void analyzeFile(importFile, false);
+                                                }
+                                            }}
+                                        >
+                                            {filteredVariables?.map((v: any) => (
+                                                <option key={v.code} value={v.code}>{v.label} ({v.unit})</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                )}
+
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id="replace"
+                                        checked={replaceExisting}
+                                        onCheckedChange={(c) => setReplaceExisting(!!c)}
+                                    />
+                                    <Label htmlFor="replace">Remplacer les données existantes pour cette période</Label>
+                                </div>
+                            </>
+                        )}
 
                         {analysisReport && (
                             <div className="bg-muted/30 p-4 rounded-md text-sm space-y-4 border mt-2 max-h-[35vh] flex flex-col">
-                                <div className="space-y-2 flex-shrink-0">
-                                    <h4 className="font-semibold flex items-center justify-between">
-                                        Résumé de l'analyse
-                                        <Badge variant="outline" className="bg-background">{analysisReport.rows_count} lignes détectées</Badge>
-                                    </h4>
-                                    <div className="grid grid-cols-2 gap-3 text-sm">
-                                        <div className="bg-background p-2.5 rounded border shadow-sm">
-                                            <div className="text-muted-foreground text-xs mb-1">Période</div>
-                                            <div className="font-medium truncate" title={`${analysisReport.start_date} - ${analysisReport.end_date}`}>
-                                                {analysisReport.start_date ? new Date(analysisReport.start_date).toLocaleDateString() : '-'} 
-                                                {' '}-{' '}
-                                                {analysisReport.end_date ? new Date(analysisReport.end_date).toLocaleDateString() : '-'}
+                                {isSpatialMode ? (
+                                    <div className="space-y-2 flex-shrink-0">
+                                        <h4 className="font-semibold flex items-center justify-between">
+                                            Résumé de l'analyse spatiale
+                                            <Badge variant="outline" className="bg-background">
+                                                {analysisReport.entites_detectees ?? analysisReport.rows_count ?? 0} entités
+                                            </Badge>
+                                        </h4>
+                                        <div className="grid grid-cols-2 gap-3 text-sm">
+                                            <div className="bg-background p-2.5 rounded border shadow-sm">
+                                                <div className="text-muted-foreground text-xs mb-1">Projection détectée</div>
+                                                <div className="font-medium text-green-700">
+                                                    {analysisReport.projection_detectee || analysisReport.crs_source || "-"}
+                                                </div>
                                             </div>
-                                        </div>
-                                        <div className="bg-background p-2.5 rounded border shadow-sm">
-                                            <div className="text-muted-foreground text-xs mb-1">Stations Détectées</div>
-                                            <div className="font-medium text-green-600 flex items-center gap-1.5">
-                                                <Check className="h-4 w-4" /> {analysisReport.stations_found} found
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    {analysisReport.unknown_columns?.length > 0 && (
-                                        <div className="text-xs text-amber-700 bg-amber-50 p-2.5 rounded border border-amber-100 flex items-start gap-2">
-                                            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                                            <div className="overflow-hidden">
-                                                <strong>Colonnes ignorées ({analysisReport.unknown_columns.length}):</strong>
-                                                <div className="truncate mt-0.5 text-amber-800/80" title={analysisReport.unknown_columns.join(', ')}>
-                                                    {analysisReport.unknown_columns.join(', ')}
+                                            <div className="bg-background p-2.5 rounded border shadow-sm">
+                                                <div className="text-muted-foreground text-xs mb-1">Correspondance bassins</div>
+                                                <div className="font-medium">
+                                                    {analysisReport.match_count ?? 0}/{analysisReport.bassins_detectes?.length ?? 0}
                                                 </div>
                                             </div>
                                         </div>
-                                    )}
-                                </div>
+                                        <div className="bg-background p-2.5 rounded border shadow-sm text-xs space-y-1">
+                                            <div>
+                                                <span className="text-muted-foreground">Bassins détectés:</span>{" "}
+                                                {(analysisReport.bassins_detectes || []).slice(0, 7).join(", ") || "-"}
+                                            </div>
+                                            <div>
+                                                <span className="text-muted-foreground">Superficie totale:</span>{" "}
+                                                {Object.values(analysisReport.superficie || {})
+                                                    .reduce((acc: number, val: any) => acc + Number(val || 0), 0)
+                                                    .toFixed(1)} km²
+                                            </div>
+                                        </div>
+                                        {(analysisReport.non_matches?.length > 0 || analysisReport.avertissements?.length > 0) && (
+                                            <div className="text-xs text-amber-700 bg-amber-50 p-2.5 rounded border border-amber-100 flex items-start gap-2">
+                                                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                                                <div className="overflow-hidden">
+                                                    {analysisReport.non_matches?.length > 0 && (
+                                                        <div><strong>Non reconnus:</strong> {analysisReport.non_matches.join(", ")}</div>
+                                                    )}
+                                                    {analysisReport.avertissements?.length > 0 && (
+                                                        <div className="truncate mt-0.5" title={analysisReport.avertissements.join(" | ")}>
+                                                            {analysisReport.avertissements.join(" | ")}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2 flex-shrink-0">
+                                        <h4 className="font-semibold flex items-center justify-between">
+                                            Résumé de l'analyse
+                                            <Badge variant="outline" className="bg-background">{analysisReport.rows_count} lignes détectées</Badge>
+                                        </h4>
+                                        <div className="grid grid-cols-2 gap-3 text-sm">
+                                            <div className="bg-background p-2.5 rounded border shadow-sm">
+                                                <div className="text-muted-foreground text-xs mb-1">Période</div>
+                                                <div className="font-medium truncate" title={`${analysisReport.start_date} - ${analysisReport.end_date}`}>
+                                                    {analysisReport.start_date ? new Date(analysisReport.start_date).toLocaleDateString('fr-FR') : '-'}
+                                                    {' '}-{' '}
+                                                    {analysisReport.end_date ? new Date(analysisReport.end_date).toLocaleDateString('fr-FR') : '-'}
+                                                </div>
+                                            </div>
+                                            <div className="bg-background p-2.5 rounded border shadow-sm">
+                                                <div className="text-muted-foreground text-xs mb-1">
+                                                    {entityType === 'bassins' ? 'Bassins detectes' : 'Stations detectees'}
+                                                </div>
+                                                <div className="font-medium text-green-600 flex items-center gap-1.5">
+                                                    <Check className="h-4 w-4" /> {analysisReport.stations_found} found
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {analysisReport.unmatched_entities?.length > 0 && (
+                                            <div className="bg-red-50 border border-red-200 text-red-700 p-2.5 rounded text-xs">
+                                                {analysisReport.unmatched_entities.length} {entityType === 'bassins' ? 'bassin(s)' : 'station(s)'} non reconnu(s):
+                                                {' '}
+                                                {analysisReport.unmatched_entities.slice(0, 8).join(', ')}
+                                                {analysisReport.unmatched_entities.length > 8 ? ' ...' : ''}
+                                            </div>
+                                        )}
+
+                                        <div className="bg-background p-2.5 rounded border shadow-sm text-xs space-y-1">
+                                            <div>
+                                                <span className="text-muted-foreground">Source d'import choisie:</span>{' '}
+                                                <span className="font-medium">{selectedSource} ({selectedSourceLabel})</span>
+                                            </div>
+                                            {detectedSourceCodesFromAnalysis.length > 0 && (
+                                                <div>
+                                                    <span className="text-muted-foreground">Sources detectees dans le fichier:</span>{' '}
+                                                    {detectedSourceCodesFromAnalysis
+                                                        .map((code: string) => `${code} (${sourceLabel(code)})`)
+                                                        .join(', ')}
+                                                </div>
+                                            )}
+                                        </div>
+                                        {(analysisReport.detected_families?.length > 0 || analysisReport.suggested_sources?.length > 0) && (
+                                            <div className="bg-background p-2.5 rounded border shadow-sm text-xs space-y-1">
+                                                {analysisReport.detected_families?.length > 0 && (
+                                                    <div>
+                                                        <span className="text-muted-foreground">Type détecté:</span>{' '}
+                                                        {analysisReport.detected_families
+                                                            .map((family: string) => (family === 'precip' ? 'Pluie' : family === 'hydro' ? 'Débit/Apport/Volume' : family))
+                                                            .join(', ')}
+                                                    </div>
+                                                )}
+                                                {analysisReport.suggested_sources?.length > 0 && (
+                                                    <div>
+                                                        <span className="text-muted-foreground">Sources suggérées:</span>{' '}
+                                                        {analysisReport.suggested_sources
+                                                            .map((code: string) => `${code} (${sourceLabel(code)})`)
+                                                            .join(', ')}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {analysisReport.source_policy && (
+                                            <div className="bg-background p-2.5 rounded border shadow-sm text-xs space-y-1">
+                                                <div className="font-medium">Regles de source</div>
+                                                {Object.entries(analysisReport.source_policy).map(([code, rule]) => (
+                                                    <div key={code}>
+                                                        <span className="font-medium">{code}:</span> {String(rule)}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {analysisReport.unknown_columns?.length > 0 && (
+                                            <div className="text-xs text-amber-700 bg-amber-50 p-2.5 rounded border border-amber-100 flex items-start gap-2">
+                                                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                                                <div className="overflow-hidden">
+                                                    <strong>Colonnes ignorées ({analysisReport.unknown_columns.length}):</strong>
+                                                    <div className="truncate mt-0.5 text-amber-800/80" title={analysisReport.unknown_columns.join(', ')}>
+                                                        {analysisReport.unknown_columns.join(', ')}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {analysisReport.column_analysis?.length > 0 && (
+                                            <div className="bg-background p-2.5 rounded border shadow-sm text-xs space-y-1">
+                                                <div className="font-medium">Analyse des colonnes</div>
+                                                <div className="max-h-28 overflow-auto border rounded">
+                                                    <table className="w-full text-[11px]">
+                                                        <thead className="bg-muted/60 sticky top-0">
+                                                            <tr>
+                                                                <th className="text-left px-2 py-1">Colonne</th>
+                                                                <th className="text-left px-2 py-1">Variable</th>
+                                                                <th className="text-left px-2 py-1">Source</th>
+                                                                <th className="text-left px-2 py-1">Type</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {analysisReport.column_analysis.slice(0, 20).map((item: any, idx: number) => (
+                                                                <tr key={`${item.column}-${idx}`} className="border-t">
+                                                                    <td className="px-2 py-1">{item.column}</td>
+                                                                    <td className="px-2 py-1">{item.variable_code || '-'}</td>
+                                                                    <td className="px-2 py-1">
+                                                                        {item.source_hint ? `${item.source_hint} (${sourceLabel(item.source_hint)})` : '-'}
+                                                                    </td>
+                                                                    <td className="px-2 py-1">{item.kind || '-'}</td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
 
                                 {analysisReport.preview && analysisReport.preview.length > 0 && (
                                     <div className="space-y-2 flex-1 min-h-0 flex flex-col">
@@ -1415,12 +2285,17 @@ function TimeSeriesManager() {
                         <Button 
                             variant="secondary" 
                             onClick={handleAnalyze} 
-                            disabled={!importFile || isAnalyzing}
+                            disabled={isSpatialMode ? (!hasRequiredSpatialFiles || isAnalyzing) : (!importFile || isAnalyzing)}
                         >
                             {isAnalyzing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Search className="h-4 w-4 mr-2" />}
                             Analyser
                         </Button>
-                        <Button onClick={handleImport} disabled={!importFile || isAnalyzing}>Importer</Button>
+                        <Button
+                            onClick={handleImport}
+                            disabled={isSpatialMode ? (!hasRequiredSpatialFiles || isAnalyzing || !isAnalysisSuccessful) : (!importFile || isAnalyzing || !isAnalysisSuccessful)}
+                        >
+                            Importer
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
@@ -1474,3 +2349,9 @@ function TimeSeriesManager() {
         </div>
     );
 }
+
+
+
+
+
+

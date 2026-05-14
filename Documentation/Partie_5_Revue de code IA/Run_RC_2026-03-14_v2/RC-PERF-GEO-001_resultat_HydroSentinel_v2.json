@@ -1,0 +1,115 @@
+﻿{
+  "prompt_id": "RC-PERF-GEO-001",
+  "date_run": "2026-03-14",
+  "projet": "HydroSentinel",
+  "observations": [
+    {
+      "id": "PERF-01",
+      "niveau": "probleme_probable",
+      "type": "render",
+      "file": "hydro-sentinel/src/pages/DataManagement.tsx",
+      "line": 1,
+      "description": "Composant DataManagement tres volumineux (1837 lignes).",
+      "impact": "Surface de rerender importante et maintenance lente.",
+      "contexte_critique": "Usage admin prolonge avec changements d'onglets et filtres.",
+      "optimisation": "Extraire sous-composants + memoiser sections lourdes.",
+      "validation": "Profiler React DevTools avant/apres extraction."
+    },
+    {
+      "id": "PERF-02",
+      "niveau": "risque",
+      "type": "algo",
+      "file": "hydro-sentinel/src/pages/DataManagement.tsx",
+      "line": 118,
+      "description": "Tri de listes recalcule a chaque render.",
+      "impact": "Surcout CPU evitable.",
+      "contexte_critique": "Grandes listes entites ou points temporels.",
+      "optimisation": "useMemo pour derives filtered/sorted.",
+      "validation": "Comparer nombre de renders et temps commit."
+    },
+    {
+      "id": "PERF-03",
+      "niveau": "probleme_probable",
+      "type": "reseau",
+      "file": "hydro-sentinel/src/pages/DataManagement.tsx",
+      "line": 1509,
+      "description": "Re-analyse fichier declenchee sur plusieurs changements formulaire.",
+      "impact": "Multiplication appels API et latence utilisateur.",
+      "contexte_critique": "Ajustements successifs mode/source/station/variable.",
+      "optimisation": "Debounce et trigger explicite bouton Analyze.",
+      "validation": "Mesurer nb appels par session import."
+    },
+    {
+      "id": "PERF-04",
+      "niveau": "risque",
+      "type": "render",
+      "file": "hydro-sentinel/src/pages/DataManagement.tsx",
+      "line": 173,
+      "description": "Tableaux sans virtualisation/pagination cote UI.",
+      "impact": "Ralentissement affichage sur grands jeux.",
+      "contexte_critique": "Stations/mesures volumineuses.",
+      "optimisation": "Pagination ou virtualization list.",
+      "validation": "Benchmark FPS et temps de paint."
+    },
+    {
+      "id": "PERF-05",
+      "niveau": "probleme_probable",
+      "type": "memoire",
+      "file": "backend/app/api/v1/endpoints/admin_new.py",
+      "line": 940,
+      "description": "Lecture complete des uploads en memoire (file.read).",
+      "impact": "Pic memoire backend.",
+      "contexte_critique": "Fichiers SHP/ZIP volumineux.",
+      "optimisation": "Traitement stream/chunk + seuil max taille.",
+      "validation": "Mesurer RAM process pendant upload gros fichier."
+    },
+    {
+      "id": "PERF-06",
+      "niveau": "risque",
+      "type": "io",
+      "file": "backend/app/api/v1/endpoints/admin_new.py",
+      "line": 973,
+      "description": "Conversion GeoDataFrame complete en GeoJSON pour dry-run.",
+      "impact": "Payload et temps serialisation eleves.",
+      "contexte_critique": "Couches geospatiales denses.",
+      "optimisation": "Retourner echantillon limite + stats.",
+      "validation": "Comparer taille reponse et temps endpoint."
+    },
+    {
+      "id": "PERF-07",
+      "niveau": "vigilance",
+      "type": "db",
+      "file": "backend/app/api/v1/endpoints/admin_new.py",
+      "line": 247,
+      "description": "Requete de suppression dss_mapping dupliquee.",
+      "impact": "Surcout DB marginal mais inutile.",
+      "contexte_critique": "Suppression en lot de stations.",
+      "optimisation": "Supprimer le doublon.",
+      "validation": "Comparer nb requetes SQL executees."
+    }
+  ],
+  "scores": {
+    "efficacite_algo": 6,
+    "memoire": 5,
+    "io_reseau": 5,
+    "scalabilite": 5,
+    "global": 5.3
+  },
+  "plan_optimisation": {
+    "p1_rapide": [
+      "Debounce/annulation appels analyze",
+      "Traitement upload en stream avec limite taille",
+      "Limiter preview dry-run SHP"
+    ],
+    "p2_moyen_terme": [
+      "Decoupage DataManagement.tsx",
+      "Memoisation derives tries/filters",
+      "Pagination ou virtualisation des tables"
+    ],
+    "p3_structurel": [
+      "Observabilite latence endpoint import/analyze",
+      "Profiling React cible sur workflows admin"
+    ]
+  },
+  "decision": "GO_PERF_CONDITIONNEL"
+}

@@ -1,0 +1,6 @@
+flowchart TB
+  auth[(auth.user)] --> api[(api views)]
+  api --> dashboard[Dashboard APIs]
+  api --> maps[Map KPIs]
+  sebou[(sebou.* tables)] --> analytics[Analytics]
+  sebou --> thematic[Thematic products]

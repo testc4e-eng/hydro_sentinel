@@ -42,7 +42,8 @@ async def global_exception_handler(request: Request, exc: Exception):
 # Set all CORS enabled origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.BACKEND_CORS_ORIGINS or ["http://localhost:8080", "http://localhost:5173", "http://localhost:3000"],
+    allow_origins=settings.BACKEND_CORS_ORIGINS,
+    allow_origin_regex=settings.BACKEND_CORS_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

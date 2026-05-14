@@ -52,10 +52,23 @@ export default function Lachers() {
       case "7d": start.setDate(end.getDate() - 7); break;
       case "14d": start.setDate(end.getDate() - 14); break;
       case "30d": start.setDate(end.getDate() - 30); break;
+      case "custom": {
+        const parsedStart = filters.customStart ? new Date(filters.customStart) : null;
+        const parsedEnd = filters.customEnd ? new Date(filters.customEnd) : null;
+        if (parsedStart && !Number.isNaN(parsedStart.getTime())) {
+          start.setTime(parsedStart.getTime());
+        } else {
+          start.setDate(end.getDate() - 7);
+        }
+        if (parsedEnd && !Number.isNaN(parsedEnd.getTime())) {
+          end.setTime(parsedEnd.getTime());
+        }
+        break;
+      }
       default: start.setDate(end.getDate() - 7);
     }
     return { start: start.toISOString(), end: end.toISOString() };
-  }, [filters.period]);
+  }, [filters.customEnd, filters.customStart, filters.period]);
 
   const availableVariables = [
     { code: "lacher_m3s", label: "Lâcher", unit: "m³/s" },

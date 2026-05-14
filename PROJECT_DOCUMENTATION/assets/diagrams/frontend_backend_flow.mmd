@@ -1,0 +1,11 @@
+sequenceDiagram
+  participant U as User
+  participant F as Frontend
+  participant A as API
+  participant D as Database
+  U->>F: interaction
+  F->>A: HTTP request
+  A->>D: query
+  D-->>A: result
+  A-->>F: JSON
+  F-->>U: UI update

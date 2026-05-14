@@ -51,3 +51,35 @@
     @apply bg-background text-foreground;
   }
 }
+
+@keyframes blink-alert {
+  0%,
+  100% {
+    opacity: 1;
+    background-color: #e24b4a;
+  }
+  50% {
+    opacity: 0.15;
+    background-color: #e24b4a;
+  }
+}
+
+.badge-alerte-active {
+  animation: blink-alert 1s ease-in-out infinite;
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 13px;
+  border-radius: 6px;
+  padding: 6px 14px;
+  border: 1px solid #e24b4a;
+}
+
+.badge-alerte-inactive {
+  background-color: hsl(var(--sidebar-accent));
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+  padding: 6px 14px;
+  border: 1px solid hsl(var(--sidebar-border));
+}

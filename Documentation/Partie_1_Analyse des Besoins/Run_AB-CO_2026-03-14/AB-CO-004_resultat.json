@@ -1,0 +1,47 @@
+﻿{
+  "prompt_id": "AB-CO-004",
+  "nom": "Identifier les parties prenantes",
+  "date_run": "2026-03-14",
+  "parties_prenantes": [
+    {
+      "acteur": "Equipe hydrologique ABHS",
+      "role": "Owner metier",
+      "influence": "Forte",
+      "attente": "Lecture fiable de la criticite et support a la decision lacher",
+      "decision": "Arbitrage vigilance et recommandations operationnelles"
+    },
+    {
+      "acteur": "Equipes exploitation barrage",
+      "role": "Utilisateurs operationnels",
+      "influence": "Forte",
+      "attente": "Informations exploitables rapidement en contexte evenementiel",
+      "decision": "Execution et ajustement des lachers"
+    },
+    {
+      "acteur": "Equipe data/admin",
+      "role": "Garant qualite data",
+      "influence": "Moyenne a forte",
+      "attente": "Parcours de correction/import robustes et tracables",
+      "decision": "Corrections donnees et politiques de qualite"
+    },
+    {
+      "acteur": "Equipe technique application",
+      "role": "Garant plateforme",
+      "influence": "Forte",
+      "attente": "Contrats API stables et performances dashboard",
+      "decision": "Priorisation technique et plan de remediations"
+    },
+    {
+      "acteur": "Tutelles institutionnelles",
+      "role": "Gouvernance",
+      "influence": "Forte",
+      "attente": "Reduction du risque crue et reporting fiable",
+      "decision": "Priorites strategiques et jalons"
+    }
+  ],
+  "raci_simplifie": [
+    {"activite": "Arbitrage metier crue/lacher", "R": "ABHS", "A": "ABHS", "C": "Exploitation barrage", "I": "Tutelles"},
+    {"activite": "Qualite et correction data", "R": "Data/Admin", "A": "Data/Admin", "C": "Equipe technique", "I": "ABHS"},
+    {"activite": "Stabilite API/dashboard", "R": "Equipe technique", "A": "Equipe technique", "C": "Data/Admin", "I": "ABHS/Tutelles"}
+  ]
+}

@@ -1,3 +1,4 @@
+import { useMemo, useRef, useState } from "react";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -12,6 +13,9 @@ import {
   ReferenceLine,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Download } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 
@@ -80,11 +84,50 @@ function buildLegacySeries(data: any[]): RecapSeriesConfig[] {
   return fallback;
 }
 
+function parseScaleInput(rawValue: string): number | undefined {
+  const normalized = rawValue.trim().replace(",", ".");
+  if (!normalized) return undefined;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function sanitizeFilename(rawValue: string): string {
+  const base = rawValue
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9_-]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return base || "recap";
+}
+
 export function RecapBarrageChart({ data, damName, series, vn = 3522.2 }: RecapBarrageChartProps) {
-  const safeData = Array.isArray(data) ? data : [];
-  const safeSeries = Array.isArray(series) && series.length > 0 ? series : buildLegacySeries(safeData);
+  const rawData = Array.isArray(data) ? data : [];
+  const safeSeries = Array.isArray(series) && series.length > 0 ? series : buildLegacySeries(rawData);
+  const chartWrapperRef = useRef<HTMLDivElement | null>(null);
+  const [leftMinInput, setLeftMinInput] = useState("");
+  const [leftMaxInput, setLeftMaxInput] = useState("");
+  const [rightMinInput, setRightMinInput] = useState("");
+  const [rightMaxInput, setRightMaxInput] = useState("");
 
   const activeSeries = safeSeries.filter((s) => !!s?.key);
+  const safeData = useMemo(
+    () =>
+      rawData.map((row) => {
+        const next: any = { ...(row || {}) };
+        activeSeries.forEach((serie) => {
+          const rawValue = next[serie.key];
+          if (rawValue === null || rawValue === undefined || rawValue === "") {
+            next[serie.key] = null;
+            return;
+          }
+          const numeric = Number(rawValue);
+          next[serie.key] = Number.isFinite(numeric) ? numeric : null;
+        });
+        return next;
+      }),
+    [activeSeries, rawData],
+  );
   const hasLeft = activeSeries.some((s) => s.axis === "left");
   const hasRight = activeSeries.some((s) => s.axis === "right");
 
@@ -98,6 +141,86 @@ export function RecapBarrageChart({ data, damName, series, vn = 3522.2 }: RecapB
 
   const showValueLabels = safeData.length <= 35;
   const hasVolumeLeft = activeSeries.some((s) => s.axis === "left" && s.unit.toLowerCase().includes("mm"));
+  const hasLeftFiniteValues = useMemo(
+    () =>
+      safeData.some((row) =>
+        activeSeries.some(
+          (serie) => serie.axis === "left" && typeof row?.[serie.key] === "number" && Number.isFinite(row[serie.key]),
+        ),
+      ),
+    [activeSeries, safeData],
+  );
+  const safeVn = Number(vn);
+  const canRenderReferenceLine = hasVolumeLeft && hasLeftFiniteValues && Number.isFinite(safeVn);
+  const leftDomain = useMemo<[number | "auto", number | "auto"]>(() => {
+    const min = parseScaleInput(leftMinInput);
+    const max = parseScaleInput(leftMaxInput);
+    if (min !== undefined && max !== undefined && min >= max) return ["auto", "auto"];
+    return [min ?? "auto", max ?? "auto"];
+  }, [leftMaxInput, leftMinInput]);
+  const rightDomain = useMemo<[number | "auto", number | "auto"]>(() => {
+    const min = parseScaleInput(rightMinInput);
+    const max = parseScaleInput(rightMaxInput);
+    if (min !== undefined && max !== undefined && min >= max) return ["auto", "auto"];
+    return [min ?? "auto", max ?? "auto"];
+  }, [rightMaxInput, rightMinInput]);
+
+  const resetScale = () => {
+    setLeftMinInput("");
+    setLeftMaxInput("");
+    setRightMinInput("");
+    setRightMaxInput("");
+  };
+
+  const handleExportGraph = () => {
+    const chartRoot = chartWrapperRef.current;
+    if (!chartRoot) return;
+
+    const svgElement = chartRoot.querySelector("svg");
+    if (!svgElement) return;
+
+    const rect = svgElement.getBoundingClientRect();
+    const width = Math.max(1, Math.round(rect.width));
+    const height = Math.max(1, Math.round(rect.height));
+
+    const clonedSvg = svgElement.cloneNode(true) as SVGElement;
+    clonedSvg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    clonedSvg.setAttribute("width", String(width));
+    clonedSvg.setAttribute("height", String(height));
+
+    const serialized = new XMLSerializer().serializeToString(clonedSvg);
+    const svgBlob = new Blob([serialized], { type: "image/svg+xml;charset=utf-8" });
+    const blobUrl = URL.createObjectURL(svgBlob);
+    const image = new Image();
+
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        URL.revokeObjectURL(blobUrl);
+        return;
+      }
+
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, width, height);
+      context.drawImage(image, 0, 0, width, height);
+
+      const anchor = document.createElement("a");
+      anchor.download = `${sanitizeFilename(`recap_${damName}`)}_${new Date().toISOString().slice(0, 10)}.png`;
+      anchor.href = canvas.toDataURL("image/png");
+      anchor.click();
+      URL.revokeObjectURL(blobUrl);
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(blobUrl);
+      console.error("Failed to export recap chart");
+    };
+
+    image.src = blobUrl;
+  };
 
   return (
     <Card className="w-full h-[560px] flex flex-col">
@@ -105,10 +228,68 @@ export function RecapBarrageChart({ data, damName, series, vn = 3522.2 }: RecapB
         <CardTitle className="text-center text-2xl font-semibold text-gray-700 uppercase">
           Recap barrage {damName}
         </CardTitle>
+        <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
+          {hasLeft && (
+            <div className="flex items-center gap-1 rounded-md border bg-muted/30 px-2 py-1">
+              <span className="text-[11px] text-muted-foreground">Axe G:</span>
+              <Input
+                type="number"
+                inputMode="decimal"
+                step="any"
+                value={leftMinInput}
+                onChange={(event) => setLeftMinInput(event.target.value)}
+                placeholder="Min"
+                className="h-7 w-[90px] text-xs"
+              />
+              <Input
+                type="number"
+                inputMode="decimal"
+                step="any"
+                value={leftMaxInput}
+                onChange={(event) => setLeftMaxInput(event.target.value)}
+                placeholder="Max"
+                className="h-7 w-[90px] text-xs"
+              />
+            </div>
+          )}
+
+          {hasRight && (
+            <div className="flex items-center gap-1 rounded-md border bg-muted/30 px-2 py-1">
+              <span className="text-[11px] text-muted-foreground">Axe D:</span>
+              <Input
+                type="number"
+                inputMode="decimal"
+                step="any"
+                value={rightMinInput}
+                onChange={(event) => setRightMinInput(event.target.value)}
+                placeholder="Min"
+                className="h-7 w-[90px] text-xs"
+              />
+              <Input
+                type="number"
+                inputMode="decimal"
+                step="any"
+                value={rightMaxInput}
+                onChange={(event) => setRightMaxInput(event.target.value)}
+                placeholder="Max"
+                className="h-7 w-[90px] text-xs"
+              />
+            </div>
+          )}
+
+          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={resetScale}>
+            Auto
+          </Button>
+          <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={handleExportGraph}>
+            <Download className="h-3 w-3" />
+            Exporter graphe
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="flex-1 p-0 pb-4">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={safeData} margin={{ top: 16, right: 24, left: 8, bottom: 36 }}>
+        <div ref={chartWrapperRef} className="h-full w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={safeData} margin={{ top: 16, right: 32, left: 16, bottom: 44 }}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis
               dataKey="date"
@@ -117,12 +298,14 @@ export function RecapBarrageChart({ data, damName, series, vn = 3522.2 }: RecapB
               textAnchor="end"
               height={100}
               tick={{ fontSize: 10 }}
+              padding={{ left: 12, right: 28 }}
             />
 
             {hasLeft && (
               <YAxis
                 yAxisId="left"
                 orientation="left"
+                domain={leftDomain}
                 label={{ value: leftUnits || "Axe gauche", angle: -90, position: "insideLeft" }}
                 tick={{ fontSize: 11 }}
               />
@@ -132,6 +315,7 @@ export function RecapBarrageChart({ data, damName, series, vn = 3522.2 }: RecapB
               <YAxis
                 yAxisId="right"
                 orientation="right"
+                domain={rightDomain}
                 label={{ value: rightUnits || "Axe droit", angle: 90, position: "insideRight" }}
                 tick={{ fontSize: 11 }}
               />
@@ -157,14 +341,14 @@ export function RecapBarrageChart({ data, damName, series, vn = 3522.2 }: RecapB
             />
             <Legend verticalAlign="bottom" />
 
-            {hasVolumeLeft && (
+            {canRenderReferenceLine && (
               <ReferenceLine
                 yAxisId="left"
-                y={vn}
+                y={safeVn}
                 stroke="#b91c1c"
                 strokeDasharray="6 4"
                 ifOverflow="visible"
-                label={{ value: `Vn=${vn}`, position: "insideTopLeft", fill: "#b91c1c", fontSize: 11 }}
+                label={{ value: `Vn=${safeVn}`, position: "insideTopLeft", fill: "#b91c1c", fontSize: 11 }}
               />
             )}
 
@@ -215,8 +399,9 @@ export function RecapBarrageChart({ data, damName, series, vn = 3522.2 }: RecapB
                 </Line>
               );
             })}
-          </ComposedChart>
-        </ResponsiveContainer>
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
       </CardContent>
     </Card>
   );

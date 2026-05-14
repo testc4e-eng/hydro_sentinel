@@ -15,20 +15,44 @@ interface Props {
   availableVariables: Array<{ code: string; label: string; unit: string }>;
   availableSources: Array<{ code: string; label: string }>;
   defaultVariable?: string;
+  period?: string;
+  onPeriodChange?: (period: string) => void;
 }
+
+const periodOptions = [
+  { value: "24h", label: "24h" },
+  { value: "72h", label: "72h" },
+  { value: "7d", label: "7 jours" },
+  { value: "14d", label: "14 jours" },
+  { value: "30d", label: "30 jours" },
+  { value: "custom", label: "Manuelle" },
+];
 
 export function SingleVariableSelector({
   onSelectionChange,
   availableVariables,
   availableSources,
   defaultVariable,
+  period,
+  onPeriodChange,
 }: Props) {
   const lastEmittedKeyRef = useRef<string>("");
 
   const defaultSources = useMemo(() => {
     if (!availableSources || availableSources.length === 0) return [];
     const codes = availableSources.map((s) => s.code);
-    if (codes.includes("OBS")) return ["OBS"];
+    const simulatedLike = codes.filter((code) =>
+      ["SIM", "HEC_HMS", "AROME", "ECMWF"].includes(code),
+    );
+    if (codes.includes("OBS")) {
+      if (simulatedLike.length > 0) {
+        return ["OBS", ...simulatedLike];
+      }
+      return ["OBS"];
+    }
+    if (simulatedLike.length > 0) {
+      return [simulatedLike[0]];
+    }
     return [codes[0]];
   }, [availableSources]);
 
@@ -112,6 +136,27 @@ export function SingleVariableSelector({
           ))}
         </div>
       </div>
+
+      {period && onPeriodChange && (
+        <>
+          <div className="w-[1px] h-5 bg-border" />
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground whitespace-nowrap">Periode :</span>
+            <Select value={period} onValueChange={onPeriodChange}>
+              <SelectTrigger className="h-8 w-[120px] text-xs">
+                <SelectValue placeholder="Periode" />
+              </SelectTrigger>
+              <SelectContent>
+                {periodOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </>
+      )}
 
       {currentVariable && (
         <div className="ml-auto text-xs text-muted-foreground">

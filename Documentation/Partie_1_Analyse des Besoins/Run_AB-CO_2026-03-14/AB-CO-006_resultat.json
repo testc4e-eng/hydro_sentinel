@@ -1,0 +1,54 @@
+﻿{
+  "prompt_id": "AB-CO-006",
+  "nom": "Identifier contraintes et hypotheses",
+  "date_run": "2026-03-14",
+  "registre": [
+    {
+      "type": "Contrainte",
+      "description": "Qualite/continuite heterogene des donnees selon source/periode/entite",
+      "impact": "Eleve",
+      "probabilite": "Elevee",
+      "mitigation": "Seuils qualite minimaux + scan quotidien + plan de correction priorise",
+      "proprietaire": "Data/Admin"
+    },
+    {
+      "type": "Contrainte",
+      "description": "Dependance aux vues SQL metier non integralement versionnees dans le repo",
+      "impact": "Eleve",
+      "probabilite": "Moyenne",
+      "mitigation": "Documenter source de verite + plan de versioning schemas core",
+      "proprietaire": "Equipe technique"
+    },
+    {
+      "type": "Contrainte",
+      "description": "Ecarts historiques de contrats API (routes legacy)",
+      "impact": "Moyen",
+      "probabilite": "Moyenne",
+      "mitigation": "Alignement frontend/backend sur endpoints cibles et deprecation explicite",
+      "proprietaire": "Equipe technique"
+    },
+    {
+      "type": "Hypothese",
+      "description": "Disponibilite durable des sources OBS/SIM/AROME/ECMWF en phase critique",
+      "impact": "Eleve",
+      "probabilite": "Moyenne",
+      "mitigation": "Mode continuite multi-source + fallback et monitoring source",
+      "proprietaire": "Data/Admin + Equipe technique"
+    },
+    {
+      "type": "Hypothese",
+      "description": "Adoption du dashboard unique par toutes les equipes operationnelles",
+      "impact": "Moyen",
+      "probabilite": "Moyenne",
+      "mitigation": "Guide operateur + drills + suivi KPI usage",
+      "proprietaire": "ABHS + Equipe produit"
+    }
+  ],
+  "synthese_risque": {
+    "risques_critiques": [
+      "Qualite data insuffisante sur variables critiques",
+      "Dependances schema SQL non maitrisees"
+    ],
+    "priorite_traitement": "Immediate"
+  }
+}

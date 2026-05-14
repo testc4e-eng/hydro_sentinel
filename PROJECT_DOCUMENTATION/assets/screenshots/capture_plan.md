@@ -1,0 +1,4 @@
+- capture du dashboard principal
+- capture de la carte de synthèse
+- capture des tableaux de données
+- capture des vues flood et snow
