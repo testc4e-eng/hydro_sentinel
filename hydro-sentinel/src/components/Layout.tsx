@@ -1,11 +1,72 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Outlet, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
 import { useAlertsStore } from "@/store/alertsStore";
+import { api } from "@/lib/api";
+import { DAMS_UNDER_SURVEILLANCE, computeStatus } from "@/features/alerts/damAlerting";
+
+const ALERT_THRESHOLD_PCT = 20;
+const ALERT_HORIZON_DAYS = 14;
+const ALERT_REFRESH_MS = 5 * 60_000;
+
+function computeAlertsFromForecast(payload: any, capacity: number): boolean {
+  const previsions = Array.isArray(payload?.previsions) ? payload.previsions : [];
+  if (!previsions.length) return false;
+
+  const minCreux = previsions.reduce((min: number, p: any) => {
+    const creux = Number(p?.creux_prevu_mm3);
+    const fallback = capacity - Number(p?.volume_prevu_mm3 || 0);
+    const value = Number.isFinite(creux) ? creux : Number.isFinite(fallback) ? fallback : min;
+    return value < min ? value : min;
+  }, Number.POSITIVE_INFINITY);
+
+  if (!Number.isFinite(minCreux)) return false;
+  const seuil = (ALERT_THRESHOLD_PCT / 100) * capacity;
+  return computeStatus(minCreux, seuil) === "ALERTE";
+}
 
 export function Layout() {
   const navigate = useNavigate();
   const activeAlertsCount = useAlertsStore((state) => state.activeAlertsCount);
+  const setActiveAlertsCount = useAlertsStore((state) => state.setActiveAlertsCount);
+
+  useEffect(() => {
+    let intervalId: number | null = null;
+    let cancelled = false;
+    let inFlight = false;
+
+    const refreshAlerts = async () => {
+      if (document.visibilityState === "hidden") return;
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const results = await Promise.all(
+          DAMS_UNDER_SURVEILLANCE.map(async (dam) => {
+            const res = await api.get("/alertes/prevision", { params: { barrage: dam.nom, nbJours: ALERT_HORIZON_DAYS } });
+            return computeAlertsFromForecast(res?.data, dam.capacite);
+          }),
+        );
+        const alerts = results.filter(Boolean).length;
+        if (!cancelled) setActiveAlertsCount(alerts);
+      } catch (err) {
+        console.error("Failed to refresh alerts:", err);
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    const timeoutId = window.setTimeout(() => {
+      refreshAlerts();
+      intervalId = window.setInterval(refreshAlerts, ALERT_REFRESH_MS);
+    }, 60_000);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+      if (intervalId !== null) window.clearInterval(intervalId);
+    };
+  }, [setActiveAlertsCount]);
 
   return (
     <SidebarProvider>

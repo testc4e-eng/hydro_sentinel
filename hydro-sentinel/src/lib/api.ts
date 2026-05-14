@@ -80,10 +80,7 @@ export const api = Object.assign(axiosInstance, {
   getEntities: (type: string) => axiosInstance.get(`/admin/entities/${type}`).then(res => res.data),
   createEntity: (type: string, data: any) => axiosInstance.post(`/admin/entities/${type}`, data),
   updateEntity: (type: string, id: string, data: any) => axiosInstance.put(`/admin/entities/${type}/${id}`, data),
-  deleteEntity: (type: string, id: string) => {
-    console.log('Deleting entity:', type, id);
-    return axiosInstance.delete(`/admin/entities/${type}/${id}`);
-  },
+  deleteEntity: (type: string, id: string) => axiosInstance.delete(`/admin/entities/${type}/${id}`),
   
   // Admin API - SHP
   uploadShp: (formData: FormData) => axiosInstance.post('/admin/shp/upload', formData, {

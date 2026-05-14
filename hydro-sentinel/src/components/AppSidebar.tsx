@@ -95,8 +95,8 @@ function CollapsibleNavItem({ item }: { item: NavItem }) {
           <NavLink
             to={item.url}
             end={item.url === "/"}
-            className="flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-sidebar-accent"
-            activeClassName="bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+            className="relative flex items-center gap-2 rounded-md px-3 py-2 text-sm text-white/80 transition-all hover:bg-white/10 hover:text-white"
+            activeClassName="bg-white/12 font-semibold text-white shadow-sm before:absolute before:left-0 before:top-1/2 before:h-6 before:w-1 before:-translate-y-1/2 before:rounded-full before:bg-[#22d3ee]"
           >
             <item.icon className="h-4 w-4" />
             <span>{item.title}</span>
@@ -110,20 +110,20 @@ function CollapsibleNavItem({ item }: { item: NavItem }) {
     <SidebarMenuItem>
       <Collapsible open={open} onOpenChange={setOpen}>
         <CollapsibleTrigger asChild>
-          <button className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent">
+          <button className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-white/80 transition-all hover:bg-white/10 hover:text-white">
             <item.icon className="h-4 w-4" />
             <span className="flex-1 text-left">{item.title}</span>
             {open ? <ChevronDown className="h-3 w-3 opacity-50" /> : <ChevronRight className="h-3 w-3 opacity-50" />}
           </button>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <div className="ml-6 mt-0.5 space-y-0.5 border-l border-sidebar-border pl-2">
+          <div className="ml-6 mt-0.5 space-y-0.5 border-l border-white/10 pl-2">
             {item.children.map((child) => (
               <SidebarMenuButton key={child.url} asChild>
                 <NavLink
                   to={child.url}
-                  className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-sidebar-accent"
-                  activeClassName="bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+                  className="relative flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-white/70 transition-all hover:bg-white/10 hover:text-white"
+                  activeClassName="bg-white/12 font-semibold text-white shadow-sm before:absolute before:left-0 before:top-1/2 before:h-4 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-[#22d3ee]"
                 >
                   <span>{child.title}</span>
                 </NavLink>
@@ -138,19 +138,21 @@ function CollapsibleNavItem({ item }: { item: NavItem }) {
 
 export function AppSidebar() {
   return (
-    <Sidebar className="border-r-0">
-      <SidebarHeader className="border-b border-sidebar-border p-4">
+    <Sidebar className="border-r border-white/5 bg-gradient-to-b from-[#0b1220] via-[#0f1a2b] to-[#0b1220] shadow-[inset_-1px_0_0_rgba(255,255,255,0.06)]">
+      <SidebarHeader className="border-b border-white/10 px-4 py-4">
         <div className="flex items-center gap-2">
-          <Droplets className="h-7 w-7 text-sidebar-primary" />
+          <Droplets className="h-7 w-7 text-[#2dd4bf] drop-shadow" />
           <div>
-            <h1 className="text-base font-bold text-sidebar-foreground">Hydro-Meteo Sebou</h1>
-            <p className="text-[10px] leading-tight text-sidebar-foreground/60">Systeme d'aide a la decision</p>
+            <h1 className="text-base font-semibold text-white">Hydro-Meteo Sebou</h1>
+            <p className="text-[10px] leading-tight text-white/60">Systeme d'aide a la decision</p>
           </div>
         </div>
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="px-2 py-2">
         <SidebarGroup>
-          <SidebarGroupLabel>Donnees</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.2em] text-white/50">
+            <span className="rounded-full bg-white/5 px-2 py-1">Donnees</span>
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map((item) => (
@@ -160,7 +162,9 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
         <SidebarGroup>
-          <SidebarGroupLabel>Administration</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.2em] text-white/50">
+            <span className="rounded-full bg-white/5 px-2 py-1">Administration</span>
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {adminItems.map((item) => (
@@ -168,8 +172,8 @@ export function AppSidebar() {
                   <SidebarMenuButton asChild>
                     <NavLink
                       to={item.url}
-                      className="flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-sidebar-accent"
-                      activeClassName="bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+                      className="relative flex items-center gap-2 rounded-md px-3 py-2 text-sm text-white/80 transition-all hover:bg-white/10 hover:text-white"
+                      activeClassName="bg-white/12 font-semibold text-white shadow-sm before:absolute before:left-0 before:top-1/2 before:h-6 before:w-1 before:-translate-y-1/2 before:rounded-full before:bg-[#22d3ee]"
                     >
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>

@@ -1,16 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
-import { HydroMap } from '@/components/HydroMap';
-import { CriticalTable } from '@/components/CriticalTable';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { KPIDashboard } from '@/components/KPIDashboard';
 import { CompactVariableSelector, CompactVariableSelection } from '@/components/analysis/CompactVariableSelector';
-import { UnifiedChart } from '@/components/analysis/UnifiedChart';
 import { CompactFilterBar, defaultCompactFilters, type CompactFilters } from '@/components/CompactFilterBar';
 import { useDashboardStore } from '@/store/dashboardStore';
 import { api } from '@/lib/api';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Layers, Settings2 } from 'lucide-react';
-import { useAlertsStore } from '@/store/alertsStore';
+import { Layers, Settings2, Loader2 } from 'lucide-react';
+
+const HydroMap = lazy(() => import('@/components/HydroMap').then((module) => ({ default: module.HydroMap })));
+const CriticalTable = lazy(() => import('@/components/CriticalTable').then((module) => ({ default: module.CriticalTable })));
+const UnifiedChart = lazy(() => import('@/components/analysis/UnifiedChart').then((module) => ({ default: module.UnifiedChart })));
 
 interface StationKpiRow {
   station_id: string;
@@ -34,7 +34,6 @@ function isAlertSeverity(severity?: string): boolean {
 
 export default function Dashboard() {
   const { selectedBasinId, mapDisplayMode } = useDashboardStore();
-  const setActiveAlertsCount = useAlertsStore((state) => state.setActiveAlertsCount);
   const [selections, setSelections] = useState<CompactVariableSelection[]>([]);
   const [stationsKpi, setStationsKpi] = useState<StationKpiRow[]>([]);
   const [filterType, setFilterType] = useState<'all' | 'Barrage' | 'Poste Pluviometrique' | 'Station hydrologique' | 'point resultats'>('all');
@@ -106,8 +105,6 @@ export default function Dashboard() {
         const alerts = critical.filter((item: any) => isAlertSeverity(item.severity)).length;
         const avgPrecip = stations.reduce((sum: number, s: any) => sum + (s.precip_cum_24h_mm || 0), 0) / (stations.length || 1);
         const maxDebit = Math.max(...stations.map((s: any) => s.debit_obs_m3s || 0));
-        setActiveAlertsCount(alerts);
-
         setKpiData({
           totalStations: stations.length,
           activeAlerts: alerts,
@@ -116,7 +113,7 @@ export default function Dashboard() {
         });
       })
       .catch((err) => console.error('Failed to fetch KPI data:', err));
-  }, [setActiveAlertsCount]);
+  }, []);
 
   useEffect(() => {
     if (!selectedBasinId) {
@@ -175,6 +172,13 @@ export default function Dashboard() {
     setBassinsVisible(true);
     setShowTypeMenu(false);
   };
+
+  const panelLoader = (
+    <div className="flex min-h-[240px] items-center justify-center rounded-xl border bg-card/60 text-sm text-muted-foreground">
+      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+      Chargement en cours...
+    </div>
+  );
 
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col gap-3 overflow-hidden p-4">
@@ -253,12 +257,16 @@ export default function Dashboard() {
               </PopoverContent>
             </Popover>
           </div>
-          <HydroMap filterType={filterType} bassinsVisible={bassinsVisible} bassinsType={bassinsType} />
+          <Suspense fallback={panelLoader}>
+            <HydroMap filterType={filterType} bassinsVisible={bassinsVisible} bassinsType={bassinsType} />
+          </Suspense>
         </div>
 
         <div className="col-span-12 flex flex-col gap-3 overflow-auto lg:col-span-4">
           <div className="flex-shrink-0">
-            <CriticalTable />
+            <Suspense fallback={panelLoader}>
+              <CriticalTable />
+            </Suspense>
           </div>
 
           {selectedBasinId ? (
@@ -268,13 +276,15 @@ export default function Dashboard() {
 
               <div className="flex-1 min-h-0 rounded-lg border bg-card p-3">
                 {selections.length > 0 ? (
-                  <UnifiedChart
-                    stationId={selectedBasinId}
-                    fallbackBasinId={stationsKpi.find((s) => s.station_id === selectedBasinId)?.basin_id ?? undefined}
-                    selections={selections}
-                    startDate={chartDateRange.start}
-                    endDate={chartDateRange.end}
-                  />
+                  <Suspense fallback={panelLoader}>
+                    <UnifiedChart
+                      stationId={selectedBasinId}
+                      fallbackBasinId={stationsKpi.find((s) => s.station_id === selectedBasinId)?.basin_id ?? undefined}
+                      selections={selections}
+                      startDate={chartDateRange.start}
+                      endDate={chartDateRange.end}
+                    />
+                  </Suspense>
                 ) : (
                   <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                     Selectionnez une variable pour afficher le graphique

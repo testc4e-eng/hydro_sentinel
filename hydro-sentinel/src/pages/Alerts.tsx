@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Info } from "lucide-react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -154,6 +155,16 @@ export default function Alerts() {
   const [loading, setLoading] = useState(true);
   const [rowsData, setRowsData] = useState<DamAlertData[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [alertsEnabled, setAlertsEnabled] = useState<Record<string, boolean>>(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const raw = window.localStorage.getItem("alertsEnabledByDam");
+      return raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [showTableHelp, setShowTableHelp] = useState(true);
 
   const [seuils, setSeuils] = useState<Record<string, { pct: number; draftPct: number }>>({});
 
@@ -239,16 +250,27 @@ export default function Alerts() {
     let vigilances = 0;
     let ok = 0;
     for (const row of evaluatedRows) {
+      const enabled = alertsEnabled[row.nom] ?? true;
+      if (!enabled) continue;
       if (row.statut === "ALERTE") alertes += 1;
       else if (row.statut === "VIGILANCE") vigilances += 1;
       else if (row.statut === "OK") ok += 1;
     }
     return { total: evaluatedRows.length, alertes, vigilances, ok };
-  }, [evaluatedRows]);
+  }, [alertsEnabled, evaluatedRows]);
 
   useEffect(() => {
     setActiveAlertsCount(summary.alertes);
   }, [setActiveAlertsCount, summary.alertes]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("alertsEnabledByDam", JSON.stringify(alertsEnabled));
+  }, [alertsEnabled]);
+
+  const toggleAlertEnabled = (nomBarrage: string) => {
+    setAlertsEnabled((prev) => ({ ...prev, [nomBarrage]: !(prev[nomBarrage] ?? true) }));
+  };
 
   const handleSeuilChange = (nomBarrage: string, value: string) => {
     const parsed = Number(value);
@@ -276,18 +298,18 @@ export default function Alerts() {
   };
 
   return (
-    <div className="p-4 lg:p-6 space-y-4">
-      <div className="flex items-center justify-between gap-3">
+    <div className="space-y-5 bg-slate-50/60 p-4 lg:p-6">
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold">Alertes Barrages (Horizon 14 jours)</h2>
-          <p className="text-xs text-muted-foreground">
+          <h2 className="text-xl font-semibold text-slate-900">Alertes Barrages (Horizon 14 jours)</h2>
+          <p className="text-xs text-slate-500">
             Regle: ALERTE si min(creux prevu t0-&gt;t14) &lt;= seuil, VIGILANCE si &lt;= seuil x 1.4
           </p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-        <Card>
+        <Card className="shadow-sm">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground">Barrages surveilles</p>
@@ -296,7 +318,7 @@ export default function Alerts() {
             <Siren className="h-6 w-6 text-blue-500" />
           </CardContent>
         </Card>
-        <Card className={summary.alertes > 0 ? "border-red-300 shadow-sm" : ""}>
+        <Card className={summary.alertes > 0 ? "border-red-300 shadow-sm" : "shadow-sm"}>
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground">Alertes (14j)</p>
@@ -305,7 +327,7 @@ export default function Alerts() {
             <AlertTriangle className={`h-6 w-6 text-red-600 ${summary.alertes > 0 ? "animate-pulse" : ""}`} />
           </CardContent>
         </Card>
-        <Card>
+        <Card className="shadow-sm">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground">Vigilance (14j)</p>
@@ -314,7 +336,7 @@ export default function Alerts() {
             <TriangleAlert className="h-6 w-6 text-orange-500" />
           </CardContent>
         </Card>
-        <Card>
+        <Card className="shadow-sm">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground">OK</p>
@@ -325,11 +347,85 @@ export default function Alerts() {
         </Card>
       </div>
 
-      <Card>
+      <Card className="shadow-sm">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Resume multi-barrages (source simulee)</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base text-slate-900">Resume multi-barrages (source simulee)</CardTitle>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-md border bg-white px-2.5 py-1 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                title={showTableHelp ? "Masquer les explications" : "Afficher les explications"}
+                onClick={() => setShowTableHelp((v) => !v)}
+              >
+                <Info className="h-4 w-4 text-slate-500" />
+                {showTableHelp ? "Masquer infos" : "Afficher infos"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const header = [
+                    "barrage",
+                    "bassin",
+                    "creux_min_prevu_mm3",
+                    "jour_du_min",
+                    "capacite_mm3",
+                    "seuil_pct",
+                    "seuil_mm3",
+                    "statut",
+                    "alerte_active",
+                  ].join(",");
+                  const rows = evaluatedRows.map((row) => {
+                    const seuil = Math.max(0, Math.min(100, Number(seuils[row.nom]?.pct ?? 20)));
+                    const enabled = alertsEnabled[row.nom] ?? true;
+                    return [
+                      row.nom,
+                      row.bassin,
+                      row.minCreuxMm3 !== null ? row.minCreuxMm3.toFixed(1) : "",
+                      row.minDate && row.minTIndex !== null ? `t+${row.minTIndex} (${formatDate(row.minDate)})` : "",
+                      row.capacite.toFixed(0),
+                      String(seuil),
+                      row.seuilMm3.toFixed(1),
+                      row.statut,
+                      enabled ? "on" : "off",
+                    ].join(",");
+                  });
+                  const content = [header, ...rows].join("\n");
+                  const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = "alertes_resume_table.csv";
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                className="rounded-md border bg-white px-2.5 py-1 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+              >
+                Telecharger tableau
+              </button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
+          {showTableHelp && (
+            <div
+              id="table-help"
+              className="mb-3 rounded-md border border-slate-200 bg-slate-50/70 p-3 text-xs text-slate-600"
+            >
+              <div className="mb-1 font-semibold text-slate-700">Explication des champs du tableau</div>
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                <div><span className="font-medium">Barrage :</span> Nom du barrage surveille.</div>
+                <div><span className="font-medium">Bassin :</span> Bassin hydrologique associe.</div>
+                <div><span className="font-medium">Creux min prevu (Mm3) :</span> Minimum des volumes prevus sur 14 jours.</div>
+                <div><span className="font-medium">Jour du min :</span> Date et decalage (t+X) du minimum prevu.</div>
+                <div><span className="font-medium">Capacite (Mm3) :</span> Capacite nominale du barrage.</div>
+                <div><span className="font-medium">Seuil % :</span> Pourcentage applique a la capacite pour definir le seuil.</div>
+                <div><span className="font-medium">Seuil Mm3 :</span> Valeur seuil en volume (Mm3).</div>
+                <div><span className="font-medium">Statut :</span> Etat calcule (Alerte, Vigilance, OK).</div>
+                <div><span className="font-medium">On/Off :</span> Activation ou desactivation locale des alertes.</div>
+              </div>
+            </div>
+          )}
           {loading ? (
             <div className="text-sm text-muted-foreground">Chargement des previsions...</div>
           ) : errorMessage ? (
@@ -347,13 +443,15 @@ export default function Alerts() {
                     <TableHead>Seuil %</TableHead>
                     <TableHead className="text-right">Seuil Mm3</TableHead>
                     <TableHead>Statut</TableHead>
+                    <TableHead>On/Off</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {evaluatedRows.map((row) => {
                     const seuilRow = seuils[row.nom] ?? { pct: 20, draftPct: 20 };
+                    const enabled = alertsEnabled[row.nom] ?? true;
                     return (
-                      <TableRow key={row.key}>
+                      <TableRow key={row.key} className="hover:bg-slate-50/70">
                         <TableCell className="font-medium">{row.nom}</TableCell>
                         <TableCell>{row.bassin}</TableCell>
                         <TableCell className="text-right">{row.minCreuxMm3 !== null ? row.minCreuxMm3.toFixed(1) : "-"}</TableCell>
@@ -379,6 +477,23 @@ export default function Alerts() {
                         </TableCell>
                         <TableCell className="text-right">{row.seuilMm3.toFixed(1)}</TableCell>
                         <TableCell>{statusBadge(row.statut)}</TableCell>
+                        <TableCell>
+                          <button
+                            type="button"
+                            onClick={() => toggleAlertEnabled(row.nom)}
+                            className={`relative inline-flex h-7 w-14 items-center rounded-full border transition-colors ${
+                              enabled ? "bg-emerald-500 border-emerald-600" : "bg-slate-300 border-slate-300"
+                            }`}
+                            title={enabled ? "Alerte active" : "Alerte desactivee"}
+                          >
+                            <span
+                              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${
+                                enabled ? "translate-x-7" : "translate-x-1"
+                              }`}
+                            />
+                            <span className="sr-only">Basculer alerte</span>
+                          </button>
+                        </TableCell>
                       </TableRow>
                     );
                   })}
@@ -389,9 +504,9 @@ export default function Alerts() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="shadow-sm">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Detail par barrage</CardTitle>
+          <CardTitle className="text-base text-slate-900">Detail par barrage</CardTitle>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue={evaluatedRows[0]?.key}>
@@ -438,9 +553,57 @@ function DamDetailSection({ row }: { row: EvaluatedDam }) {
     })})`,
   }));
 
+  const downloadCsv = () => {
+    const header = ["date", "t_index", "creux_prevu_mm3", "taux_pct", "statut"].join(",");
+    const rows = row.series.map((day) => {
+      const taux = row.capacite > 0 ? (day.creuxPrevu / row.capacite) * 100 : 0;
+      const statut = computeStatus(day.creuxPrevu, row.seuilMm3);
+      return [
+        day.date,
+        String(day.tIndex),
+        day.creuxPrevu.toFixed(1),
+        taux.toFixed(1),
+        statut,
+      ].join(",");
+    });
+    const content = [header, ...rows].join("\n");
+    const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `alertes_${row.key}_table.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadChart = () => {
+    const container = document.getElementById(`chart-${row.key}`);
+    const svg = container?.querySelector("svg");
+    if (!svg) return;
+    const serializer = new XMLSerializer();
+    const source = serializer.serializeToString(svg);
+    const blob = new Blob([source], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `alertes_${row.key}_chart.svg`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-4">
-      <div className="h-[280px] rounded-md border p-2">
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-medium text-slate-800">Graphe des creux prevus</div>
+        <button
+          type="button"
+          onClick={downloadChart}
+          className="rounded-md border bg-white px-2.5 py-1 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+        >
+          Telecharger graphe
+        </button>
+      </div>
+      <div id={`chart-${row.key}`} className="h-[280px] rounded-md border bg-white p-2 shadow-sm">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={chartData} margin={{ top: 10, right: 32, left: 16, bottom: 24 }}>
             <defs>
@@ -481,7 +644,17 @@ function DamDetailSection({ row }: { row: EvaluatedDam }) {
         </ResponsiveContainer>
       </div>
 
-      <div className="rounded-md border overflow-x-auto">
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-medium text-slate-800">Tableau detaille</div>
+        <button
+          type="button"
+          onClick={downloadCsv}
+          className="rounded-md border bg-white px-2.5 py-1 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+        >
+          Telecharger tableau
+        </button>
+      </div>
+      <div className="rounded-md border bg-white shadow-sm overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>

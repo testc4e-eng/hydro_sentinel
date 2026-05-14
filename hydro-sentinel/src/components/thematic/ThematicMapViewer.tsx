@@ -335,7 +335,10 @@ export function ThematicMapViewer({ mapType, product, className }: ThematicMapVi
   const [mapError, setMapError] = useState<string | null>(null);
   const [layerStates, setLayerStates] = useState<Record<string, LayerState>>({});
   const [basemapId, setBasemapId] = useState<BasemapId>("satellite_labels");
-  const [precipRenderMode, setPrecipRenderMode] = useState<"mode1" | "mode2">("mode2");
+  const [precipRenderMode, setPrecipRenderMode] = useState<"mode1" | "mode2">(() => {
+    if (typeof window === "undefined") return "mode2";
+    return window.localStorage.getItem("precipRenderMode") === "mode1" ? "mode1" : "mode2";
+  });
   const [styleReadyTick, setStyleReadyTick] = useState(0);
 
   const clearThemedLayers = (map: maplibregl.Map) => {
@@ -441,8 +444,8 @@ export function ThematicMapViewer({ mapType, product, className }: ThematicMapVi
 
   useEffect(() => {
     if (mapType !== "precip") return;
-    setPrecipRenderMode("mode2");
-  }, [product?.id, mapType]);
+    window.localStorage.setItem("precipRenderMode", precipRenderMode);
+  }, [mapType, precipRenderMode]);
 
   useEffect(() => {
     const map = mapRef.current;

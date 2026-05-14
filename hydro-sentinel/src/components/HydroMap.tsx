@@ -76,7 +76,11 @@ export function HydroMap({ filterType = 'all', bassinsVisible = false, bassinsTy
   const [points, setPoints] = React.useState<MapPoint[]>([]);
   const [basinsAbh, setBasinsAbh] = React.useState<any[]>([]);
   const [basinsDgm, setBasinsDgm] = React.useState<any[]>([]);
+  const [pointsLoading, setPointsLoading] = React.useState(true);
+  const [basinsLoading, setBasinsLoading] = React.useState(false);
+  const [mapError, setMapError] = React.useState<string | null>(null);
   const [sourceMode, setSourceMode] = React.useState<'OBS' | 'SIM'>('OBS');
+  const shouldLoadBasins = bassinsVisible || bassinsType !== null;
   const hasHydroSimulatedData = useMemo(
     () => points.some((p) => p.debit_sim_m3s !== null || p.volume_sim_hm3 !== null),
     [points]
@@ -164,27 +168,59 @@ export function HydroMap({ filterType = 'all', bassinsVisible = false, bassinsTy
     }
   }, [canUseSimulatedSource, sourceMode]);
 
-  // Fetch points & basins
   useEffect(() => {
-    // Fetch KPI points
-    api.get<MapPoint[]>('/map/points-kpi')
-      .then(res => {
-        console.log("ðŸ—ºï¸ fetched map points:", res.data.length);
-        setPoints(res.data);
-      })
-      .catch(err => console.error("Failed to load map points", err));
-      
-    // Fetch Basins by type (with fallback for legacy API that returns a single list)
-    Promise.allSettled([
-      api.get<any[]>('/basins', { params: { provider: 'ABH' } }),
-      api.get<any[]>('/basins', { params: { provider: 'DGM' } }),
-      api.get<any[]>('/basins'),
-      fetch(`/data/basins_dgm.geojson?v=${Date.now()}`).then((response) => {
-        if (!response.ok) throw new Error(`Failed to load local DGM basins (${response.status})`);
-        return response.json();
-      }),
-    ])
-      .then(([abhRes, dgmRes, legacyRes, localDgmRes]) => {
+    let cancelled = false;
+
+    const loadPoints = async () => {
+      setPointsLoading(true);
+      try {
+        const res = await api.get<MapPoint[]>('/map/points-kpi');
+        if (!cancelled) {
+          setPoints(res.data);
+          setMapError(null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Failed to load map points', err);
+          setMapError('Impossible de charger les points de la carte.');
+        }
+      } finally {
+        if (!cancelled) {
+          setPointsLoading(false);
+        }
+      }
+    };
+
+    loadPoints();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!shouldLoadBasins) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadBasins = async () => {
+      setBasinsLoading(true);
+      try {
+        const results = await Promise.allSettled([
+          api.get<any[]>('/basins', { params: { provider: 'ABH' } }),
+          api.get<any[]>('/basins', { params: { provider: 'DGM' } }),
+          api.get<any[]>('/basins'),
+          fetch('/data/basins_dgm.geojson', { cache: 'force-cache' }).then((response) => {
+            if (!response.ok) throw new Error(`Failed to load local DGM basins (${response.status})`);
+            return response.json();
+          }),
+        ]);
+
+        if (cancelled) return;
+
+        const [abhRes, dgmRes, legacyRes, localDgmRes] = results;
         const legacyBasins = legacyRes.status === 'fulfilled' ? legacyRes.value.data ?? [] : [];
         const abhBasins = abhRes.status === 'fulfilled' ? abhRes.value.data ?? [] : [];
         const dgmBasins = dgmRes.status === 'fulfilled' ? dgmRes.value.data ?? [] : [];
@@ -206,20 +242,33 @@ export function HydroMap({ filterType = 'all', bassinsVisible = false, bassinsTy
           : [];
 
         const finalAbh = abhBasins.length > 0 ? abhBasins : (splitAbh.length > 0 ? splitAbh : legacyBasins);
-        // DGM must use local SHP-derived GeoJSON first to avoid API/provider mixups.
         const finalDgm = localDgmBasins.length > 0
           ? localDgmBasins
           : (dgmBasins.length > 0
             ? dgmBasins
             : (splitDgm.length > 0 ? splitDgm : legacyBasins));
 
-        console.log('fetched basins ABH:', finalAbh.length);
-        console.log('fetched basins DGM:', finalDgm.length);
         setBasinsAbh(finalAbh);
         setBasinsDgm(finalDgm);
-      })
-      .catch(err => console.error("Failed to load basins", err));
-  }, []);
+        setMapError(null);
+      } catch (err) {
+        console.error('Failed to load basins', err);
+        if (!cancelled) {
+          setMapError('Certaines couches cartographiques n\'ont pas pu être chargées.');
+        }
+      } finally {
+        if (!cancelled) {
+          setBasinsLoading(false);
+        }
+      }
+    };
+
+    loadBasins();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [shouldLoadBasins]);
 
   const pointGeoJson = useMemo(() => ({
     type: 'FeatureCollection',
@@ -657,6 +706,18 @@ export function HydroMap({ filterType = 'all', bassinsVisible = false, bassinsTy
   return (
     <div className="relative w-full h-full rounded-lg overflow-hidden border">
       <div ref={mapContainer} className="w-full h-full" />
+      {(pointsLoading || basinsLoading) && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/40 backdrop-blur-[1px]">
+          <div className="rounded-lg border bg-background/95 px-4 py-3 text-sm text-muted-foreground shadow-sm">
+            Chargement de la carte...
+          </div>
+        </div>
+      )}
+      {mapError && (
+        <div className="absolute bottom-4 left-4 z-20 max-w-sm rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 shadow-sm">
+          {mapError}
+        </div>
+      )}
       
       {/* Map Control - Top Right */}
       <div className="absolute top-4 right-4 bg-background/90 backdrop-blur-sm p-2 rounded-md shadow-md border z-10 w-36">

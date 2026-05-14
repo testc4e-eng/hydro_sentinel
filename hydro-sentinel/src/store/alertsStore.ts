@@ -18,5 +18,9 @@ export const useAlertsStore = create<AlertsState>((set) => ({
         ...patch,
       },
     })),
-  setActiveAlertsCount: (count) => set({ activeAlertsCount: Math.max(0, Math.floor(count || 0)) }),
+  setActiveAlertsCount: (count) =>
+    set((state) => {
+      const next = Math.max(0, Math.floor(count || 0));
+      return state.activeAlertsCount === next ? state : { activeAlertsCount: next };
+    }),
 }));
